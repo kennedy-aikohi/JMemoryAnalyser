@@ -28,3 +28,6 @@ rules/vendor/
 Thumbs.db
 .vscode/
 .idea/
+
+# Packaging/build metadata
+*.egg-info/
