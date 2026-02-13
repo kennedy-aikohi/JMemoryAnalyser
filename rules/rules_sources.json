@@ -1,0 +1,24 @@
+{
+  "yara_sources": [
+    {
+      "name": "Neo23x0_signature-base",
+      "git": "https://github.com/Neo23x0/signature-base.git",
+      "branch": "master",
+      "paths": ["yara"]
+    },
+    {
+      "name": "Microsoft_ATR_Yara-Rules",
+      "git": "https://github.com/advanced-threat-research/Yara-Rules.git",
+      "branch": "master",
+      "paths": ["rules"]
+    }
+  ],
+  "sigma_sources": [
+    {
+      "name": "SigmaHQ_sigma",
+      "git": "https://github.com/SigmaHQ/sigma.git",
+      "branch": "master",
+      "paths": ["rules"]
+    }
+  ]
+}

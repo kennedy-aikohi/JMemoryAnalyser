@@ -1,0 +1,30 @@
+﻿# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Case data & outputs
+cases/
+reports/
+_csv/
+
+# Memory dumps
+*.dmp
+*.DMP
+*.raw
+*.RAW
+*.mem
+*.MEM
+*.vmem
+*.VMEM
+
+# Third-party rules
+rules/vendor/
+
+# OS junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
