@@ -180,7 +180,9 @@ JMemoryAnalyser/
 
 Kennedy Aikohi
 https://kennedy-aikohi.com
+
 https://github.com/kennedy-aikohi
+
 https://linkedin.com/in/aikohikennedy
 
 ---
