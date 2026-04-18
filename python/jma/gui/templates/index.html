@@ -1,0 +1,1832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMemoryAnalyser — Process Memory Forensics Workbench</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   JMemoryAnalyser GUI  ·  Kennedy Aikohi  ·  v1.0.0
+   Industrial dark theme — WinDbg-class forensics workbench
+   ═══════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#0b0d12;--bg1:#10131a;--bg2:#161b24;--bg3:#1d2330;--bg4:#242c3d;
+  --border:#252d40;--border2:#323d55;--border3:#3e4d6a;
+  --green:#00e676;--green-d:#00b84d;--green-bg:#0a2018;
+  --amber:#ffab00;--amber-d:#cc8800;--amber-bg:#1e1500;
+  --red:#ff4444;--red-d:#cc2222;--red-bg:#1e0808;
+  --blue:#4488ff;--blue-d:#2266dd;--blue-bg:#081428;
+  --cyan:#00d4ff;--cyan-d:#00a8cc;--cyan-bg:#001824;
+  --purple:#cc44ff;--purple-d:#aa22dd;--purple-bg:#180824;
+  --pink:#ff44aa;--pink-bg:#200814;
+  --text0:#dde3f0;--text1:#8892aa;--text2:#4a5570;--text3:#2e3850;
+  --mono:'JetBrains Mono','Cascadia Code','Fira Code',monospace;
+  --sans:'Segoe UI','Inter',system-ui,sans-serif;
+  --r2:2px;--r4:4px;--r6:6px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px}
+
+/* ── SCROLLBARS ─────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--border3)}
+
+/* ── TITLE BAR ──────────────────────────────────────── */
+#titlebar{
+  height:44px;background:var(--bg1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:14px;flex-shrink:0;
+  position:relative;
+}
+.tb-shield{
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  background:var(--green-bg);border:1px solid var(--green-d);border-radius:var(--r4);flex-shrink:0;
+}
+.tb-shield svg{width:16px;height:16px;fill:none;stroke:var(--green);stroke-width:2}
+.tb-product{display:flex;flex-direction:column;gap:1px}
+.tb-name{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);letter-spacing:2px}
+.tb-sub{font-size:10px;color:var(--text2);letter-spacing:.5px}
+.tb-divider{width:1px;height:20px;background:var(--border2)}
+.tb-author{display:flex;flex-direction:column;gap:2px}
+.tb-author-name{font-size:11px;font-weight:600;color:var(--text1)}
+.tb-author-links{display:flex;gap:8px}
+.tb-link{font-size:10px;color:var(--cyan-d);text-decoration:none;font-family:var(--mono)}
+.tb-link:hover{color:var(--cyan)}
+.tb-badge{
+  padding:2px 8px;border-radius:10px;font-size:10px;font-family:var(--mono);font-weight:600;
+  background:var(--green-bg);border:1px solid var(--green-d);color:var(--green);
+}
+.tb-status{display:flex;align-items:center;gap:6px;margin-left:auto}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--text2);transition:all .3s}
+.status-dot.loaded{background:var(--green);box-shadow:0 0 8px var(--green)}
+.status-dot.scanning{background:var(--amber);animation:blink 1s infinite}
+.status-dot.error{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.status-txt{font-size:11px;color:var(--text1);font-family:var(--mono);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-btns{display:flex;gap:6px;margin-left:12px}
+.tb-btn{
+  height:28px;padding:0 12px;border-radius:var(--r4);font-size:11px;cursor:pointer;
+  border:1px solid var(--border2);background:transparent;color:var(--text1);
+  font-family:var(--sans);transition:all .15s;white-space:nowrap;
+}
+.tb-btn:hover{background:var(--bg3);color:var(--text0);border-color:var(--border3)}
+.tb-btn.primary{background:var(--green-bg);border-color:var(--green-d);color:var(--green)}
+.tb-btn.primary:hover{background:var(--green);color:#000}
+.tb-btn.accent{background:var(--blue-bg);border-color:var(--blue-d);color:var(--blue)}
+.tb-btn.accent:hover{background:var(--blue);color:#fff}
+.tb-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── COMMAND BAR ─────────────────────────────────────── */
+#cmdbar{
+  height:34px;background:var(--bg1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0;
+}
+.kd-prompt{font-family:var(--mono);font-size:12px;color:var(--cyan);flex-shrink:0;font-weight:700}
+#cmd-input{
+  flex:1;height:24px;background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--r4);padding:0 10px;font-family:var(--mono);font-size:12px;
+  color:var(--text0);outline:none;transition:border .15s;min-width:0;
+}
+#cmd-input:focus{border-color:var(--cyan)}
+#cmd-input::placeholder{color:var(--text2)}
+.cmd-run-btn{
+  height:24px;padding:0 14px;background:var(--cyan-bg);border:1px solid var(--cyan-d);
+  border-radius:var(--r4);color:var(--cyan);font-size:11px;cursor:pointer;font-family:var(--mono);
+  font-weight:700;transition:all .15s;
+}
+.cmd-run-btn:hover{background:var(--cyan);color:#000}
+.presets{display:flex;gap:4px;flex-wrap:nowrap}
+.preset{
+  height:24px;padding:0 9px;background:transparent;border:1px solid var(--border);
+  border-radius:var(--r4);color:var(--text2);font-size:10px;cursor:pointer;
+  font-family:var(--mono);white-space:nowrap;transition:all .12s;
+}
+.preset:hover{border-color:var(--amber-d);color:var(--amber)}
+
+/* ── MAIN LAYOUT ─────────────────────────────────────── */
+#main{display:flex;flex:1;overflow:hidden;height:calc(100vh - 44px - 34px - 22px)}
+
+/* ── LEFT NAVIGATOR ──────────────────────────────────── */
+#nav{width:210px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.nav-hdr{
+  height:26px;padding:0 10px;display:flex;align-items:center;gap:6px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1.8px;text-transform:uppercase;
+}
+.nav-hdr svg{width:11px;height:11px;fill:none;stroke:var(--text2);stroke-width:2}
+.nav-tree{flex:1;overflow-y:auto;padding:4px 0}
+.nav-group{}
+.nav-group-hdr{
+  height:26px;padding:0 8px;display:flex;align-items:center;gap:5px;
+  cursor:pointer;font-size:11px;font-weight:600;color:var(--text1);transition:all .1s;
+}
+.nav-group-hdr:hover{background:var(--bg3);color:var(--text0)}
+.nav-arrow{font-size:8px;color:var(--text2);transition:transform .15s;display:inline-block;flex-shrink:0}
+.nav-arrow.open{transform:rotate(90deg)}
+.nav-children{display:none}
+.nav-children.open{display:block}
+.nav-item{
+  height:24px;padding:0 10px 0 26px;display:flex;align-items:center;gap:6px;
+  cursor:pointer;font-size:11px;color:var(--text1);font-family:var(--mono);
+  transition:background .1s;white-space:nowrap;overflow:hidden;
+}
+.nav-item:hover{background:var(--bg3);color:var(--text0)}
+.nav-item.sel{background:var(--blue-bg);color:var(--blue);border-left:2px solid var(--blue)}
+.nav-badge{
+  margin-left:auto;font-size:9px;padding:1px 5px;border-radius:8px;
+  font-family:var(--sans);font-weight:700;flex-shrink:0;
+}
+.nb-ok{background:var(--green-bg);color:var(--green)}
+.nb-warn{background:var(--amber-bg);color:var(--amber)}
+.nb-danger{background:var(--red-bg);color:var(--red)}
+.nb-info{background:var(--blue-bg);color:var(--blue)}
+
+/* Drop zone in nav */
+#drop-zone{
+  margin:10px;padding:16px 8px;border:1px dashed var(--border2);border-radius:var(--r6);
+  text-align:center;cursor:pointer;transition:all .2s;
+}
+#drop-zone:hover,#drop-zone.drag-over{border-color:var(--green-d);background:var(--green-bg)}
+#drop-zone p{font-size:10px;color:var(--text2);line-height:1.6}
+#drop-zone p strong{color:var(--text1)}
+#file-input{display:none}
+
+/* ── CENTER WORKSPACE ────────────────────────────────── */
+#workspace{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* TABS */
+#tabs{
+  height:32px;background:var(--bg1);border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-end;padding:0 8px;gap:2px;flex-shrink:0;overflow-x:auto;
+}
+#tabs::-webkit-scrollbar{height:0}
+.tab{
+  height:28px;padding:0 14px;display:flex;align-items:center;gap:6px;
+  cursor:pointer;border-radius:var(--r4) var(--r4) 0 0;
+  border:1px solid transparent;border-bottom:none;
+  font-size:11px;color:var(--text2);white-space:nowrap;transition:all .15s;
+}
+.tab:hover{background:var(--bg2);color:var(--text1)}
+.tab.active{background:var(--bg0);border-color:var(--border);color:var(--text0);border-bottom:1px solid var(--bg0)}
+.tab-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* PANES */
+#pane-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.pane{display:none;flex:1;overflow:hidden;flex-direction:column}
+.pane.active{display:flex;animation:fadeIn .15s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+/* TOOLBAR shared */
+.pane-toolbar{
+  height:34px;background:var(--bg1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0;
+}
+.filter-in{
+  height:24px;padding:0 8px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--r4);color:var(--text0);font-size:11px;font-family:var(--mono);
+  outline:none;transition:border .15s;
+}
+.filter-in:focus{border-color:var(--blue)}
+.filter-in::placeholder{color:var(--text2)}
+.pill{
+  height:22px;padding:0 9px;border:1px solid var(--border);border-radius:10px;
+  background:transparent;color:var(--text2);font-size:10px;cursor:pointer;
+  transition:all .12s;white-space:nowrap;font-family:var(--sans);
+}
+.pill:hover:not(.on){border-color:var(--border3);color:var(--text1)}
+.pill.on{background:var(--blue-bg);border-color:var(--blue-d);color:var(--blue)}
+.pill.on-red{background:var(--red-bg);border-color:var(--red-d);color:var(--red)}
+.pill.on-amber{background:var(--amber-bg);border-color:var(--amber-d);color:var(--amber)}
+.spacer{flex:1}
+.count-lbl{font-size:10px;color:var(--text2);font-family:var(--mono);white-space:nowrap}
+
+/* ── API TABLE ───────────────────────────────────────── */
+.tbl-wrap{flex:1;overflow-y:auto}
+table.api-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+table.api-tbl thead{position:sticky;top:0;z-index:5}
+table.api-tbl thead th{
+  background:var(--bg2);border-bottom:1px solid var(--border2);
+  padding:5px 10px;font-size:9px;font-weight:700;color:var(--text2);
+  text-align:left;letter-spacing:1px;text-transform:uppercase;cursor:pointer;
+  user-select:none;white-space:nowrap;
+}
+table.api-tbl thead th:hover{color:var(--text0)}
+table.api-tbl tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .08s}
+table.api-tbl tbody tr:hover{background:var(--bg2)}
+table.api-tbl tbody tr.sel{background:var(--blue-bg);border-left:2px solid var(--blue)}
+table.api-tbl tbody tr.hot{background:rgba(255,68,68,.05)}
+table.api-tbl tbody tr.hot:hover{background:rgba(255,68,68,.1)}
+table.api-tbl tbody td{padding:5px 10px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-api{width:190px;font-family:var(--mono);color:var(--cyan)}
+.c-mod{width:140px;font-family:var(--mono);color:var(--text1)}
+.c-addr{width:130px;font-family:var(--mono);color:var(--amber)}
+.c-cat{width:120px}
+.c-flags{width:100px;font-family:var(--mono);font-size:11px}
+.c-risk{width:78px}
+.c-desc{font-size:11px;color:var(--text1)}
+.cat-pill{display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600}
+.cp-net   {background:#061428;color:#82b1ff;border:1px solid #1a3a6e}
+.cp-mem   {background:#180824;color:#ea80fc;border:1px solid #4a1a6e}
+.cp-proc  {background:#0a2018;color:#69f0ae;border:1px solid #1a5a38}
+.cp-crypt {background:#1e1500;color:#ffd740;border:1px solid #5a3e00}
+.cp-file  {background:#001824;color:#84ffff;border:1px solid #004a5a}
+.cp-reg   {background:#1a1200;color:#ffcc80;border:1px solid #4a3800}
+.cp-sys   {background:#0e1428;color:#90caf9;border:1px solid #1e3456}
+.cp-dbg   {background:#200816;color:#f48fb1;border:1px solid #5a1a36}
+.risk-H{color:var(--red);font-weight:700;font-size:11px}
+.risk-M{color:var(--amber);font-size:11px}
+.risk-L{color:var(--green);font-size:11px}
+.risk-N{color:var(--text2);font-size:11px}
+.sort-ind{color:var(--amber);margin-left:3px;font-size:9px}
+
+/* ── DETAIL PANEL (bottom) ───────────────────────────── */
+#detail{
+  height:230px;border-top:1px solid var(--border);background:var(--bg1);
+  display:flex;flex-direction:column;flex-shrink:0;
+}
+.dtabs{
+  height:26px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-end;padding:0 8px;gap:1px;flex-shrink:0;
+}
+.dtab{
+  height:22px;padding:0 12px;font-size:11px;cursor:pointer;color:var(--text2);
+  border-radius:var(--r4) var(--r4) 0 0;transition:all .1s;
+}
+.dtab:hover{background:var(--bg3);color:var(--text1)}
+.dtab.active{background:var(--bg1);color:var(--text0);border:1px solid var(--border);border-bottom:1px solid var(--bg1)}
+.dpane{display:none;flex:1;overflow-y:auto;padding:10px 14px;font-family:var(--mono);font-size:12px;line-height:1.7}
+.dpane.active{display:block}
+.dg{display:grid;grid-template-columns:145px 1fr;gap:3px 10px}
+.dk{color:var(--text2);font-size:11px;align-self:start;padding-top:1px}
+.dv{color:var(--text0)}
+.dv.addr{color:var(--amber)}
+.dv.ok  {color:var(--green)}
+.dv.warn{color:var(--amber)}
+.dv.bad {color:var(--red)}
+.dv.pur {color:var(--purple)}
+.dv.cyan{color:var(--cyan)}
+.detail-note{
+  margin-top:10px;padding:8px 10px;background:var(--bg2);border-radius:var(--r4);
+  border-left:2px solid var(--blue-d);color:var(--text1);font-family:var(--sans);
+  font-size:11px;line-height:1.6;
+}
+.threat-card{
+  margin-top:8px;padding:8px 10px;background:var(--red-bg);border-radius:var(--r4);
+  border-left:2px solid var(--red-d);
+}
+.threat-title{color:var(--red);font-size:11px;font-weight:700;margin-bottom:4px}
+.threat-body{color:#ff8888;font-size:11px;font-family:var(--sans);line-height:1.5}
+
+/* ── MEMORY MAP ──────────────────────────────────────── */
+.mem-hdr-row{
+  display:grid;grid-template-columns:130px 75px 90px 65px 1fr;
+  padding:4px 10px;font-size:9px;font-weight:700;color:var(--text2);
+  letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border2);
+  background:var(--bg2);position:sticky;top:0;
+}
+.mem-row{
+  display:grid;grid-template-columns:130px 75px 90px 65px 1fr;
+  padding:4px 10px;border-bottom:1px solid var(--border);
+  cursor:pointer;transition:background .08s;font-family:var(--mono);font-size:11px;
+}
+.mem-row:hover{background:var(--bg2)}
+.mem-row.rwx{background:rgba(255,68,68,.06)}
+.mem-row.rwx:hover{background:rgba(255,68,68,.12)}
+.mem-addr{color:var(--amber)}
+.mem-sz{color:var(--text2);text-align:right}
+.mem-prot-RWX{color:var(--red);font-weight:700}
+.mem-prot-RW{color:var(--amber)}
+.mem-prot-RX{color:var(--blue)}
+.mem-prot-R{color:var(--green)}
+.mem-prot-NA{color:var(--text2)}
+.mem-type{color:var(--text2)}
+.mem-desc{color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── IOC HUNTER ──────────────────────────────────────── */
+#ioc-grid{display:flex;flex-direction:column;gap:12px;padding:14px;overflow-y:auto;flex:1}
+.ioc-section{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r6);overflow:hidden}
+.ioc-section-hdr{
+  padding:6px 12px;background:var(--bg3);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+}
+.ioc-title{font-size:11px;font-weight:700;letter-spacing:.5px}
+.ioc-count{margin-left:auto;font-size:10px;padding:1px 7px;border-radius:8px;font-family:var(--mono);font-weight:700}
+.ioc-body{padding:8px 12px;display:flex;flex-wrap:wrap;gap:5px}
+.ioc-chip{
+  padding:2px 10px;border-radius:var(--r4);font-family:var(--mono);font-size:11px;
+  background:var(--bg0);border:1px solid var(--border2);color:var(--text0);
+  cursor:pointer;transition:all .12s;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.ioc-chip:hover{border-color:var(--border3);background:var(--bg3)}
+
+/* ── COMMAND OUTPUT ──────────────────────────────────── */
+#cmd-out{
+  flex:1;overflow-y:auto;padding:10px 14px;font-family:var(--mono);
+  font-size:12px;line-height:1.75;background:var(--bg0);
+}
+.cl{display:block}
+.cl-prompt{color:var(--cyan);font-weight:700}
+.cl-out{color:var(--text0)}
+.cl-addr{color:var(--amber)}
+.cl-ok{color:var(--green)}
+.cl-warn{color:var(--amber)}
+.cl-err{color:var(--red)}
+.cl-section{color:var(--purple);font-weight:700}
+.cl-dim{color:var(--text2)}
+.cl-blank{height:8px;display:block}
+
+/* ── STRINGS PANE ────────────────────────────────────── */
+.str-entry{
+  padding:2px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);
+  font-size:11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background .08s;
+}
+.str-entry:hover{background:var(--bg2)}
+.str-entry.ioc{color:var(--red)}
+.str-entry.url{color:var(--blue)}
+.str-entry.path{color:var(--cyan)}
+.str-entry.plain{color:var(--text1)}
+
+/* ── MODULES PANE ────────────────────────────────────── */
+.mod-row{
+  display:grid;grid-template-columns:190px 130px 90px 80px 1fr;
+  padding:4px 10px;border-bottom:1px solid var(--border);
+  cursor:pointer;transition:background .08s;font-family:var(--mono);font-size:11px;
+}
+.mod-row:hover{background:var(--bg2)}
+.mod-row.warn{background:rgba(255,171,0,.05)}
+.mod-row.hot{background:rgba(255,68,68,.05)}
+.mod-name{color:var(--cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mod-base{color:var(--amber)}
+.mod-sz{color:var(--text2);text-align:right}
+.mod-ts{color:var(--text2)}
+.mod-path{color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── RIGHT PANEL ─────────────────────────────────────── */
+#right{width:250px;background:var(--bg1);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.rp-section{border-bottom:1px solid var(--border);flex-shrink:0}
+.rp-section.grow{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.rp-hdr{
+  height:26px;padding:0 10px;display:flex;align-items:center;gap:6px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1.8px;text-transform:uppercase;
+}
+.rp-body{padding:10px}
+
+/* RISK SCORE */
+.risk-overall{
+  text-align:center;padding:12px;background:var(--bg2);border-radius:var(--r6);
+  border:1px solid var(--border);margin-bottom:10px;
+}
+.risk-num{font-size:40px;font-weight:700;font-family:var(--mono);line-height:1;letter-spacing:-2px}
+.risk-label{font-size:10px;color:var(--text2);margin-top:3px;letter-spacing:1.5px;font-weight:600}
+.risk-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.risk-row-lbl{width:68px;font-size:10px;color:var(--text2)}
+.risk-track{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.risk-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.risk-val{width:20px;text-align:right;font-family:var(--mono);font-size:10px}
+
+/* HIVE */
+.hive{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.hive-cell{
+  padding:7px 8px;background:var(--bg2);border-radius:var(--r4);border:1px solid var(--border);
+  cursor:pointer;transition:all .12s;
+}
+.hive-cell:hover{border-color:var(--border3);background:var(--bg3)}
+.hive-cell.sel{border-color:var(--blue-d);background:var(--blue-bg)}
+.hive-n{font-size:9px;color:var(--text2);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.hive-c{font-size:20px;font-family:var(--mono);font-weight:700;line-height:1.2}
+.hive-bar{height:2px;border-radius:1px;margin-top:4px}
+
+/* AUTHOR CARD */
+.author-card{padding:10px;display:flex;flex-direction:column;gap:6px}
+.author-avatar{
+  width:36px;height:36px;border-radius:50%;background:var(--green-bg);
+  border:1px solid var(--green-d);display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;color:var(--green);flex-shrink:0;
+}
+.author-top{display:flex;align-items:center;gap:8px}
+.author-name{font-size:12px;font-weight:700;color:var(--text0)}
+.author-role{font-size:10px;color:var(--text2)}
+.author-links{display:flex;flex-direction:column;gap:2px}
+.author-link{font-size:10px;color:var(--cyan-d);text-decoration:none;font-family:var(--mono);transition:color .1s}
+.author-link:hover{color:var(--cyan)}
+
+/* ── STATUS BAR ──────────────────────────────────────── */
+#statusbar{
+  height:22px;background:var(--bg1);border-top:1px solid var(--border);
+  display:flex;align-items:center;padding:0 12px;gap:14px;flex-shrink:0;
+}
+.sb{font-size:10px;color:var(--text2);font-family:var(--mono);display:flex;align-items:center;gap:4px;white-space:nowrap}
+.sb span{color:var(--text1)}
+.sb-sep{width:1px;height:12px;background:var(--border2)}
+.sb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+  background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r6);
+  padding:8px 16px;font-size:12px;color:var(--text0);z-index:999;
+  opacity:0;transition:opacity .2s;pointer-events:none;font-family:var(--mono);
+}
+#toast.show{opacity:1}
+
+/* Loading overlay */
+#loading{
+  position:fixed;inset:0;background:rgba(11,13,18,.85);z-index:100;
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+}
+#loading.show{display:flex}
+.spin{
+  width:32px;height:32px;border:2px solid var(--border2);border-top-color:var(--green);
+  border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-family:var(--mono);font-size:12px;color:var(--green)}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading"><div class="spin"></div><span class="loading-txt" id="loading-txt">Analysing...</span></div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- ═══ TITLE BAR ═══════════════════════════════════════════════════════ -->
+<div id="titlebar">
+  <div class="tb-shield">
+    <svg viewBox="0 0 24 24"><path d="M12 2L3 7v5c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7L12 2z"/></svg>
+  </div>
+  <div class="tb-product">
+    <div class="tb-name">JMEMORYANALYSER</div>
+    <div class="tb-sub">Process Memory Forensics Workbench · v1.0.0</div>
+  </div>
+  <div class="tb-divider"></div>
+  <div class="tb-author">
+    <div class="tb-author-name">Kennedy Aikohi</div>
+    <div class="tb-author-links">
+      <a class="tb-link" href="https://kennedy-aikohi.com"       target="_blank">kennedy-aikohi.com</a>
+      <a class="tb-link" href="https://github.com/kennedy-aikohi" target="_blank">github.com/kennedy-aikohi</a>
+      <a class="tb-link" href="https://linkedin.com/in/aikohikennedy" target="_blank">linkedin/aikohikennedy</a>
+    </div>
+  </div>
+  <span class="tb-badge">DFIR · SOC · Purple Team</span>
+
+  <div class="tb-status">
+    <div class="status-dot" id="s-dot"></div>
+    <span class="status-txt" id="s-txt">No dump loaded — drop a .DMP file or click Open</span>
+  </div>
+  <div class="tb-btns">
+    <button class="tb-btn"        onclick="document.getElementById('file-input').click()">Open DMP</button>
+    <button class="tb-btn accent" onclick="runFullTriage()" id="btn-triage" disabled>Full Triage</button>
+    <button class="tb-btn"        onclick="doExport()"      id="btn-export" disabled>Export JSON/CSV</button>
+  </div>
+</div>
+
+<!-- ═══ COMMAND BAR ══════════════════════════════════════════════════════ -->
+<div id="cmdbar">
+  <span class="kd-prompt">kd&gt;</span>
+  <input id="cmd-input" placeholder="!peb  |  lm  |  ~  |  !analyze -v  |  !address  |  !iat  |  vertarget  |  k" onkeydown="cmdKey(event)">
+  <button class="cmd-run-btn" onclick="sendCmd()">Run ↵</button>
+  <div class="presets">
+    <button class="preset" onclick="setCmd('!peb')">!peb</button>
+    <button class="preset" onclick="setCmd('lm')">lm</button>
+    <button class="preset" onclick="setCmd('~')">~</button>
+    <button class="preset" onclick="setCmd('!analyze -v')">!analyze -v</button>
+    <button class="preset" onclick="setCmd('!address')">!address</button>
+    <button class="preset" onclick="setCmd('!iat')">!iat</button>
+    <button class="preset" onclick="setCmd('vertarget')">vertarget</button>
+    <button class="preset" onclick="setCmd('k')">k</button>
+    <button class="preset" onclick="setCmd('dt nt!_peb')">dt _PEB</button>
+    <button class="preset" onclick="setCmd('!handle 0 3')">!handle</button>
+  </div>
+</div>
+
+<!-- ═══ MAIN ══════════════════════════════════════════════════════════════ -->
+<div id="main">
+
+  <!-- LEFT NAV -->
+  <div id="nav">
+    <div class="nav-hdr">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      Navigator
+    </div>
+    <div class="nav-tree" id="nav-tree">
+
+      <!-- Drop zone -->
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()" ondragover="dzDrag(event)" ondrop="dzDrop(event)" ondragleave="dzLeave()">
+        <p><strong>Drop .DMP here</strong><br>or click to browse</p>
+      </div>
+      <input type="file" id="file-input" accept=".dmp,.DMP" onchange="fileChosen(event)">
+
+      <div id="nav-sections" style="display:none">
+        <div class="nav-group">
+          <div class="nav-group-hdr" onclick="toggleNav('nv-dump')">
+            <span class="nav-arrow open" id="arr-nv-dump">▶</span> Dump Info
+          </div>
+          <div class="nav-children open" id="nv-dump">
+            <div class="nav-item sel" onclick="goTab('api',this)">📋 API Inspector</div>
+            <div class="nav-item"     onclick="goTab('modules',this)">📦 Modules</div>
+            <div class="nav-item"     onclick="goTab('mem',this)">🗺 Memory Map</div>
+            <div class="nav-item"     onclick="goTab('threads',this)">🧵 Threads</div>
+          </div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-hdr" onclick="toggleNav('nv-analysis')">
+            <span class="nav-arrow open" id="arr-nv-analysis">▶</span> Analysis
+          </div>
+          <div class="nav-children open" id="nv-analysis">
+            <div class="nav-item" onclick="goTab('ioc',this)">🎯 IOC Hunter</div>
+            <div class="nav-item" onclick="goTab('strings',this)">🔡 Strings</div>
+            <div class="nav-item" onclick="goTab('cmd',this)">💻 Command Output</div>
+            <div class="nav-item" onclick="goTab('vol',this)">🧠 Volatility</div>
+          </div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-hdr" onclick="toggleNav('nv-mods')">
+            <span class="nav-arrow" id="arr-nv-mods">▶</span> Loaded Modules
+          </div>
+          <div class="nav-children" id="nv-mods" id="nav-mod-list"></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /nav -->
+
+  <!-- CENTER -->
+  <div id="workspace">
+    <div id="tabs">
+      <div class="tab active" data-pane="pane-api"     onclick="switchTab(this)"><span class="tab-pip" style="background:var(--cyan)"></span>API Inspector</div>
+      <div class="tab"        data-pane="pane-modules" onclick="switchTab(this)"><span class="tab-pip" style="background:var(--amber)"></span>Modules</div>
+      <div class="tab"        data-pane="pane-mem"     onclick="switchTab(this)"><span class="tab-pip" style="background:var(--purple)"></span>Memory Map</div>
+      <div class="tab"        data-pane="pane-threads" onclick="switchTab(this)"><span class="tab-pip" style="background:var(--green)"></span>Threads</div>
+      <div class="tab"        data-pane="pane-ioc"     onclick="switchTab(this)"><span class="tab-pip" style="background:var(--red)"></span>IOC Hunter</div>
+      <div class="tab"        data-pane="pane-strings" onclick="switchTab(this)"><span class="tab-pip" style="background:var(--blue)"></span>Strings</div>
+      <div class="tab"        data-pane="pane-cmd"     onclick="switchTab(this)"><span class="tab-pip" style="background:var(--amber)"></span>Cmd Output</div>
+      <div class="tab"        data-pane="pane-vol"     onclick="switchTab(this)"><span class="tab-pip" style="background:var(--pink)"></span>Volatility</div>
+    </div>
+
+    <div id="pane-area">
+
+      <!-- ── API INSPECTOR ── -->
+      <div class="pane active" id="pane-api">
+        <div class="pane-toolbar">
+          <input class="filter-in" id="api-q" placeholder="Filter name, module, address..." oninput="renderAPITable()" style="width:210px">
+          <button class="pill on" id="pill-all"        onclick="setPill('all')">All</button>
+          <button class="pill"    id="pill-net"        onclick="setPill('net')">Network</button>
+          <button class="pill"    id="pill-mem2"       onclick="setPill('mem2')">Memory/Inject</button>
+          <button class="pill"    id="pill-proc"       onclick="setPill('proc')">Process</button>
+          <button class="pill"    id="pill-crypt"      onclick="setPill('crypt')">Crypto</button>
+          <button class="pill"    id="pill-sys"        onclick="setPill('sys')">Sys/Evasion</button>
+          <button class="pill on-red" id="pill-sus"   onclick="setPill('sus')" style="margin-left:4px">⚠ Suspicious</button>
+          <div class="spacer"></div>
+          <span class="count-lbl" id="api-count">—</span>
+        </div>
+        <div class="tbl-wrap">
+          <table class="api-tbl">
+            <thead><tr>
+              <th class="c-api"   onclick="sortBy('name')">API Name <span class="sort-ind" id="si-name"></span></th>
+              <th class="c-mod"   onclick="sortBy('module')">Module <span class="sort-ind" id="si-module"></span></th>
+              <th class="c-addr"  onclick="sortBy('addr')">Address <span class="sort-ind" id="si-addr"></span></th>
+              <th class="c-cat"   onclick="sortBy('cat')">Category <span class="sort-ind" id="si-cat"></span></th>
+              <th class="c-flags">IAT / Flags</th>
+              <th class="c-risk"  onclick="sortBy('risk')">Risk <span class="sort-ind" id="si-risk">↓</span></th>
+              <th class="c-desc">Description</th>
+            </tr></thead>
+            <tbody id="api-tbody"></tbody>
+          </table>
+        </div>
+        <!-- DETAIL -->
+        <div id="detail">
+          <div class="dtabs">
+            <div class="dtab active" onclick="switchDTab('dt-info',this)">Detail</div>
+            <div class="dtab"        onclick="switchDTab('dt-xref',this)">Call Sites</div>
+            <div class="dtab"        onclick="switchDTab('dt-pseudo',this)">Pseudo-Code</div>
+            <div class="dtab"        onclick="switchDTab('dt-att',this)">MITRE ATT&CK</div>
+          </div>
+          <div class="dpane active" id="dt-info"><span style="color:var(--text2)">Select an API row to inspect details →</span></div>
+          <div class="dpane" id="dt-xref"></div>
+          <div class="dpane" id="dt-pseudo"></div>
+          <div class="dpane" id="dt-att"></div>
+        </div>
+      </div>
+
+      <!-- ── MODULES ── -->
+      <div class="pane" id="pane-modules">
+        <div class="pane-toolbar">
+          <input class="filter-in" placeholder="Filter module name, path..." oninput="filterMods(this.value)" style="width:220px">
+          <div class="spacer"></div>
+          <span class="count-lbl" id="mod-count">—</span>
+        </div>
+        <div class="tbl-wrap">
+          <div class="mod-row" style="font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;background:var(--bg2);border-bottom:1px solid var(--border2);cursor:default">
+            <div>Module</div><div>Base Addr</div><div style="text-align:right">Size</div><div>Timestamp</div><div>Full Path</div>
+          </div>
+          <div id="mod-body"></div>
+        </div>
+      </div>
+
+      <!-- ── MEMORY MAP ── -->
+      <div class="pane" id="pane-mem">
+        <div class="pane-toolbar">
+          <input class="filter-in" placeholder="Filter address, protection, description..." oninput="filterMem(this.value)" style="width:220px">
+          <button class="pill on" onclick="filterMemProt('ALL',this)">All</button>
+          <button class="pill"    onclick="filterMemProt('RWX',this)">⚠ RWX</button>
+          <button class="pill"    onclick="filterMemProt('RW',this)">RW</button>
+          <button class="pill"    onclick="filterMemProt('RX',this)">RX</button>
+          <div class="spacer"></div>
+          <span class="count-lbl" id="mem-count">—</span>
+        </div>
+        <div class="tbl-wrap" id="mem-wrap">
+          <div class="mem-hdr-row">
+            <div>Base Address</div><div style="text-align:right">Size</div><div>Protection</div><div>Type</div><div>Description</div>
+          </div>
+          <div id="mem-body"></div>
+        </div>
+      </div>
+
+      <!-- ── THREADS ── -->
+      <div class="pane" id="pane-threads">
+        <div class="pane-toolbar">
+          <div class="spacer"></div>
+          <span class="count-lbl" id="thr-count">—</span>
+        </div>
+        <div class="tbl-wrap">
+          <table class="api-tbl">
+            <thead><tr>
+              <th style="width:90px">Thread ID</th>
+              <th style="width:100px">Suspend Count</th>
+              <th style="width:100px">Priority Class</th>
+              <th style="width:80px">Priority</th>
+              <th>TEB Address</th>
+            </tr></thead>
+            <tbody id="thr-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── IOC HUNTER ── -->
+      <div class="pane" id="pane-ioc">
+        <div id="ioc-grid"><span style="color:var(--text2);padding:20px;display:block">Load and triage a dump to populate IOC Hunter →</span></div>
+      </div>
+
+      <!-- ── STRINGS ── -->
+      <div class="pane" id="pane-strings">
+        <div class="pane-toolbar">
+          <input class="filter-in" placeholder="Search strings..." oninput="filterStr(this.value)" style="width:220px">
+          <button class="pill on" id="sp-all"  onclick="setStrPill('all')">All</button>
+          <button class="pill"    id="sp-ioc"  onclick="setStrPill('ioc')">IOC</button>
+          <button class="pill"    id="sp-url"  onclick="setStrPill('url')">URLs</button>
+          <button class="pill"    id="sp-path" onclick="setStrPill('path')">Paths</button>
+          <div class="spacer"></div>
+          <span class="count-lbl" id="str-count">—</span>
+        </div>
+        <div class="tbl-wrap" id="str-body"></div>
+      </div>
+
+      <!-- ── COMMAND OUTPUT ── -->
+      <div class="pane" id="pane-cmd">
+        <div class="pane-toolbar">
+          <button class="tb-btn" onclick="clearCmd()" style="height:24px;font-size:10px">Clear</button>
+          <div class="spacer"></div>
+          <span class="count-lbl" id="cmd-count">0 commands run</span>
+        </div>
+        <div id="cmd-out">
+          <span class="cl cl-dim">JMemoryAnalyser — WinDbg-Mode Command Engine</span>
+          <span class="cl cl-dim">Kennedy Aikohi · github.com/kennedy-aikohi</span>
+          <span class="cl cl-blank"></span>
+          <span class="cl cl-dim">Load a .DMP file then run commands, or use the presets above.</span>
+          <span class="cl cl-dim">Supported: !peb, lm, ~, !analyze -v, !address, !iat, vertarget, k, dt nt!_peb, !handle 0 3</span>
+          <span class="cl cl-blank"></span>
+        </div>
+      </div>
+
+
+      <!-- VOLATILITY PANE -->
+      <div class="pane" id="pane-vol">
+        <div class="pane-toolbar">
+          <button class="tb-btn accent" onclick="volTriage()" id="btn-vol-triage" style="height:24px;font-size:11px">Triage Run</button>
+          <button class="tb-btn" onclick="volFull()" id="btn-vol-full" style="height:24px;font-size:11px">Full Run</button>
+          <select id="vol-plugin-select" style="height:24px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text0);font-size:11px;padding:0 6px;font-family:var(--mono)">
+            <option value="">-- Run single plugin --</option>
+          </select>
+          <button class="tb-btn" onclick="volSingle()" style="height:24px;font-size:11px">Run Plugin</button>
+          <div class="spacer"></div>
+          <span class="count-lbl" id="vol-status">Not run</span>
+        </div>
+        <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+
+          <!-- LEFT: plugin status list -->
+          <div style="width:220px;border-right:1px solid var(--border);background:var(--bg1);display:flex;flex-direction:column;flex-shrink:0">
+            <div style="height:26px;padding:0 10px;display:flex;align-items:center;background:var(--bg2);border-bottom:1px solid var(--border);font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1.5px;text-transform:uppercase">Plugins</div>
+            <div style="flex:1;overflow-y:auto" id="vol-plugin-list"></div>
+          </div>
+
+          <!-- RIGHT: results panels -->
+          <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0;min-width:0">
+
+            <!-- Risk banner -->
+            <div id="vol-risk-banner" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div id="vol-risk-badge" style="padding:4px 14px;border-radius:4px;font-family:var(--mono);font-size:14px;font-weight:700">--</div>
+                <div id="vol-risk-score" style="font-family:var(--mono);font-size:12px;color:var(--text1)"></div>
+                <div id="vol-findings" style="font-size:11px;color:var(--red);flex:1"></div>
+              </div>
+            </div>
+
+            <!-- Process list (pslist + hidden) -->
+            <div id="vol-proc-section" style="display:none;border-bottom:1px solid var(--border)">
+              <div style="padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px">
+                Process List
+                <span id="vol-proc-count" style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--green-bg);color:var(--green);font-family:var(--mono)"></span>
+                <span id="vol-hidden-badge" style="display:none;font-size:10px;padding:1px 6px;border-radius:8px;background:var(--red-bg);color:var(--red);font-family:var(--mono)"></span>
+              </div>
+              <div style="max-height:180px;overflow-y:auto" id="vol-proc-body"></div>
+            </div>
+
+            <!-- Malfind hits -->
+            <div id="vol-malfind-section" style="display:none;border-bottom:1px solid var(--border)">
+              <div style="padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--red);letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px">
+                Malfind - Suspicious Memory
+                <span id="vol-mf-count" style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--red-bg);color:var(--red);font-family:var(--mono)"></span>
+              </div>
+              <div style="max-height:180px;overflow-y:auto" id="vol-mf-body"></div>
+            </div>
+
+            <!-- Network -->
+            <div id="vol-net-section" style="display:none;border-bottom:1px solid var(--border)">
+              <div style="padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--blue);letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px">
+                Network Connections
+                <span id="vol-net-count" style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--blue-bg);color:var(--blue);font-family:var(--mono)"></span>
+                <span id="vol-c2-badge" style="display:none;font-size:10px;padding:1px 6px;border-radius:8px;background:var(--red-bg);color:var(--red);font-family:var(--mono)"></span>
+              </div>
+              <div style="max-height:160px;overflow-y:auto" id="vol-net-body"></div>
+            </div>
+
+            <!-- SSDT hooks -->
+            <div id="vol-ssdt-section" style="display:none;border-bottom:1px solid var(--border)">
+              <div style="padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--purple);letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px">
+                SSDT Hooks (Rootkit Detector)
+                <span id="vol-ssdt-count" style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--purple-bg);color:var(--purple);font-family:var(--mono)"></span>
+              </div>
+              <div style="max-height:140px;overflow-y:auto" id="vol-ssdt-body"></div>
+            </div>
+
+            <!-- Raw plugin output -->
+            <div style="padding:10px 14px;flex:1">
+              <div style="font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Raw Plugin Output</div>
+              <div id="vol-raw" style="font-family:var(--mono);font-size:11px;color:var(--text1);line-height:1.7;white-space:pre-wrap">Volatility output will appear here after running a plugin...</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pane-area -->
+  </div><!-- /workspace -->
+
+  <!-- RIGHT PANEL -->
+  <div id="right">
+
+    <!-- RISK SCORE -->
+    <div class="rp-section">
+      <div class="rp-hdr">Risk Score</div>
+      <div class="rp-body" id="risk-body">
+        <div style="color:var(--text2);font-size:10px;text-align:center;padding:8px">Run triage to see risk scoring</div>
+      </div>
+    </div>
+
+    <!-- API CATEGORIES -->
+    <div class="rp-section">
+      <div class="rp-hdr">API Categories</div>
+      <div class="rp-body"><div class="hive" id="hive"></div></div>
+    </div>
+
+    <!-- AUTHOR CARD -->
+    <div class="rp-section">
+      <div class="rp-hdr">Tool Author</div>
+      <div class="author-card">
+        <div class="author-top">
+          <div class="author-avatar">KA</div>
+          <div>
+            <div class="author-name">Kennedy Aikohi</div>
+            <div class="author-role">DFIR · Malware Analyst · Purple Team</div>
+          </div>
+        </div>
+        <div class="author-links">
+          <a class="author-link" href="https://kennedy-aikohi.com"            target="_blank">🌐 kennedy-aikohi.com</a>
+          <a class="author-link" href="https://github.com/kennedy-aikohi"      target="_blank">🐙 github.com/kennedy-aikohi</a>
+          <a class="author-link" href="https://linkedin.com/in/aikohikennedy"  target="_blank">💼 linkedin/aikohikennedy</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUSPICIOUS STRINGS (live) -->
+    <div class="rp-section grow">
+      <div class="rp-hdr">Suspicious Strings</div>
+      <div style="flex:1;overflow-y:auto" id="right-strings">
+        <div style="color:var(--text2);font-size:10px;padding:8px 10px">Populated after scan →</div>
+      </div>
+    </div>
+
+  </div><!-- /right -->
+
+</div><!-- /main -->
+
+<!-- STATUS BAR -->
+<div id="statusbar">
+  <div class="sb">File: <span id="sb-file">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">Format: <span id="sb-fmt">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">PID: <span id="sb-pid">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">OS: <span id="sb-os">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">SHA256: <span id="sb-sha">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">Modules: <span id="sb-mods">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">APIs tracked: <span id="sb-apis">—</span></div>
+  <div class="sb-sep"></div>
+  <div class="sb">Risk: <span id="sb-risk">—</span></div>
+  <div class="sb-right">
+    <div class="sb">JMemoryAnalyser v1.0.0 · Kennedy Aikohi · <a href="https://kennedy-aikohi.com" target="_blank" style="color:var(--cyan-d);text-decoration:none">kennedy-aikohi.com</a></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   JMemoryAnalyser Frontend Engine
+   All API calls go to the Flask backend (server.py)
+   Fallback static data used when no dump is loaded for demonstration.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const BASE = "";
+
+// ── State ────────────────────────────────────────────────────────────────
+let STATE = {
+  loaded: false, path: null, filename: null,
+  basic: null, mdmp: null,
+  apis: [], modules: [], threads: [], memRegions: [],
+  iocs: { ips:[], urls:[], domains:[], pipes:[], yara:[] },
+  strings: [],
+  sortCol: "risk", sortDir: -1,
+  activePill: "all",
+  strPill: "all",
+  cmdCount: 0,
+};
+
+// ── API Categories / Risk lookup ─────────────────────────────────────────
+const CAT = {
+  net:"Network", mem2:"Memory/Inject", proc:"Process",
+  crypt:"Crypto", file:"File I/O", reg:"Registry",
+  sys:"Sys/Evasion", dbg:"Anti-Debug"
+};
+const CAT_CLS = {
+  net:"cp-net", mem2:"cp-mem", proc:"cp-proc", crypt:"cp-crypt",
+  file:"cp-file", reg:"cp-reg", sys:"cp-sys", dbg:"cp-dbg"
+};
+const RISK_LBL = ["—","LOW","MED","MED","HIGH","HIGH"];
+const RISK_CLS = ["risk-N","risk-L","risk-M","risk-M","risk-H","risk-H"];
+
+// ── Static API dataset (enriched, categorised, risk-scored) ─────────────
+const STATIC_APIS = [
+  // Network
+  {name:"WSAConnect",         module:"ws2_32.dll",     addr:"0x7ffe4a10", cat:"net",  flags:"IAT",     risk:3, iat:true,  desc:"Establishes socket connection to peer. Core C2 beacon call."},
+  {name:"WSASend",            module:"ws2_32.dll",     addr:"0x7ffe4b20", cat:"net",  flags:"IAT",     risk:3, iat:true,  desc:"Sends data on connected socket. Used for C2 data exfiltration."},
+  {name:"WSARecv",            module:"ws2_32.dll",     addr:"0x7ffe4b80", cat:"net",  flags:"IAT",     risk:2, iat:true,  desc:"Receives data from socket. C2 command retrieval."},
+  {name:"WinHttpOpen",        module:"winhttp.dll",    addr:"0x7ffe8100", cat:"net",  flags:"IAT",     risk:3, iat:true,  desc:"Opens WinHTTP session. Widely used by C2 implants for HTTPS beacon comms."},
+  {name:"WinHttpConnect",     module:"winhttp.dll",    addr:"0x7ffe8200", cat:"net",  flags:"IAT",     risk:3, iat:true,  desc:"Specifies target HTTP server. C2 infrastructure indicator."},
+  {name:"WinHttpSendRequest", module:"winhttp.dll",    addr:"0x7ffe8300", cat:"net",  flags:"IAT",     risk:3, iat:true,  desc:"Sends HTTP request. Beacon check-in / data exfiltration mechanism."},
+  {name:"WinHttpReceiveResponse",module:"winhttp.dll", addr:"0x7ffe8400", cat:"net",  flags:"IAT",     risk:2, iat:true,  desc:"Reads HTTP server response. Paired with SendRequest in C2 loops."},
+  {name:"URLDownloadToFileW", module:"urlmon.dll",     addr:"0x7ffea000", cat:"net",  flags:"IAT",     risk:3, iat:true,  desc:"Downloads URL content directly to file. Classic dropper/stager pattern."},
+  {name:"InternetOpenUrlA",   module:"wininet.dll",    addr:"0x7ffe9100", cat:"net",  flags:"IAT",     risk:2, iat:true,  desc:"Opens resource by URL. Payload staging indicator."},
+  {name:"getaddrinfo",        module:"ws2_32.dll",     addr:"0x7ffe4d00", cat:"net",  flags:"IAT",     risk:1, iat:true,  desc:"Resolves hostname to IP. C2 domain resolution."},
+  {name:"socket",             module:"ws2_32.dll",     addr:"0x7ffe4c00", cat:"net",  flags:"IAT",     risk:1, iat:true,  desc:"Creates socket endpoint."},
+  {name:"connect",            module:"ws2_32.dll",     addr:"0x7ffe4c40", cat:"net",  flags:"IAT",     risk:2, iat:true,  desc:"Initiates TCP connection to remote host."},
+  // Memory / Injection
+  {name:"VirtualAllocEx",     module:"kernel32.dll",   addr:"0x7ffe0100", cat:"mem2", flags:"IAT+RWX", risk:4, iat:true,  desc:"Allocates memory in a remote process. Core process injection primitive — the first step of the injection triad."},
+  {name:"WriteProcessMemory", module:"kernel32.dll",   addr:"0x7ffe0200", cat:"mem2", flags:"IAT",     risk:4, iat:true,  desc:"Writes into another process's address space. Shellcode / DLL injection step 2."},
+  {name:"CreateRemoteThread", module:"kernel32.dll",   addr:"0x7ffe0300", cat:"mem2", flags:"IAT",     risk:4, iat:true,  desc:"Creates execution thread in a remote process. Completes the classic injection triad."},
+  {name:"NtCreateThreadEx",   module:"ntdll.dll",      addr:"0x7ffe5100", cat:"mem2", flags:"IAT",     risk:4, iat:true,  desc:"Low-level NT thread creation. Bypasses CreateRemoteThread hooks; used by advanced loaders."},
+  {name:"VirtualProtect",     module:"kernel32.dll",   addr:"0x7ffe0400", cat:"mem2", flags:"IAT+RWX", risk:3, iat:true,  desc:"Changes memory page protection. Shellcode loaders flip pages to PAGE_EXECUTE before jumping."},
+  {name:"NtUnmapViewOfSection",module:"ntdll.dll",     addr:"0x7ffe5200", cat:"mem2", flags:"IAT",     risk:4, iat:true,  desc:"Unmaps process image section. Key process hollowing primitive (step 2 after OpenProcess)."},
+  {name:"ZwMapViewOfSection",  module:"ntdll.dll",     addr:"0x7ffe5300", cat:"mem2", flags:"IAT",     risk:4, iat:true,  desc:"Maps a view of a section into a process. Used in process doppelganging and hollowing."},
+  {name:"SetThreadContext",    module:"kernel32.dll",   addr:"0x7ffe1500", cat:"mem2", flags:"IAT",     risk:3, iat:true,  desc:"Sets thread register context. EIP/RIP hijacking during process hollowing."},
+  {name:"QueueUserAPC",        module:"kernel32.dll",  addr:"0x7ffe1700", cat:"mem2", flags:"IAT",     risk:3, iat:true,  desc:"Queues APC to thread. Early-bird APC injection — executes shellcode before main thread runs."},
+  {name:"VirtualAlloc",        module:"kernel32.dll",  addr:"0x7ffe0500", cat:"mem2", flags:"IAT",     risk:1, iat:true,  desc:"Allocates process-local virtual memory. Suspicious when followed by VirtualProtect + exec."},
+  {name:"RtlDecompressBuffer", module:"ntdll.dll",     addr:"0x7ffe5600", cat:"mem2", flags:"IAT",     risk:2, iat:true,  desc:"Decompresses data buffer. Packer unpacking stub — compressed payload extraction."},
+  // Process
+  {name:"OpenProcess",          module:"kernel32.dll", addr:"0x7ffe1000", cat:"proc", flags:"IAT",     risk:2, iat:true,  desc:"Opens handle to another process. Required before any cross-process memory operation."},
+  {name:"CreateProcessW",       module:"kernel32.dll", addr:"0x7ffe1100", cat:"proc", flags:"IAT",     risk:1, iat:true,  desc:"Creates a new process. Suspicious when spawning cmd/powershell from unexpected parent."},
+  {name:"CreateToolhelp32Snapshot",module:"kernel32.dll",addr:"0x7ffe1300",cat:"proc",flags:"IAT",    risk:2, iat:true,  desc:"Snapshots processes, threads, modules. Classic process enumeration for injection targeting."},
+  {name:"Process32FirstW",      module:"kernel32.dll", addr:"0x7ffe1400", cat:"proc", flags:"IAT",     risk:1, iat:true,  desc:"Enumerates processes from snapshot. Injection target discovery."},
+  {name:"GetThreadContext",     module:"kernel32.dll", addr:"0x7ffe1600", cat:"proc", flags:"IAT",     risk:2, iat:true,  desc:"Reads thread register state. Used to find original EIP before hollowing."},
+  {name:"TerminateProcess",     module:"kernel32.dll", addr:"0x7ffe1200", cat:"proc", flags:"IAT",     risk:1, iat:true,  desc:"Kills a process. Ransomware kills AV/backup processes before encrypting."},
+  // Crypto
+  {name:"CryptEncrypt",     module:"advapi32.dll", addr:"0x7ffb1000", cat:"crypt", flags:"IAT", risk:2, iat:true, desc:"Encrypts data via legacy CryptoAPI. Ransomware / C2 traffic encryption indicator."},
+  {name:"CryptGenKey",      module:"advapi32.dll", addr:"0x7ffb1100", cat:"crypt", flags:"IAT", risk:2, iat:true, desc:"Generates a cryptographic key. Ransomware key generation."},
+  {name:"BCryptEncrypt",    module:"bcrypt.dll",   addr:"0x7ffb2000", cat:"crypt", flags:"IAT", risk:2, iat:true, desc:"CNG symmetric encryption. Modern ransomware prefers BCrypt over legacy CryptoAPI."},
+  {name:"BCryptGenRandom",  module:"bcrypt.dll",   addr:"0x7ffb2100", cat:"crypt", flags:"IAT", risk:1, iat:true, desc:"Generates cryptographically random bytes. Key/IV material generation."},
+  {name:"CryptHashData",    module:"advapi32.dll", addr:"0x7ffb1200", cat:"crypt", flags:"IAT", risk:0, iat:true, desc:"Hashes data. Commonly benign; context-dependent."},
+  // File / Registry
+  {name:"CreateFileW",      module:"kernelbase.dll",addr:"0x7ffc0100", cat:"file", flags:"IAT", risk:0, iat:true, desc:"Creates or opens a file. Very common baseline call."},
+  {name:"DeleteFileW",      module:"kernelbase.dll",addr:"0x7ffc0200", cat:"file", flags:"IAT", risk:1, iat:true, desc:"Deletes a file. Ransomware deletes originals after encryption."},
+  {name:"FindFirstFileW",   module:"kernelbase.dll",addr:"0x7ffc0300", cat:"file", flags:"IAT", risk:1, iat:true, desc:"File enumeration. Ransomware walks directory tree for encryption targets."},
+  {name:"MoveFileExW",      module:"kernelbase.dll",addr:"0x7ffc0400", cat:"file", flags:"IAT", risk:1, iat:true, desc:"Renames a file. Ransomware rename-to-encrypted extension pattern."},
+  {name:"RegOpenKeyExW",    module:"advapi32.dll",  addr:"0x7ffb3000", cat:"reg",  flags:"IAT", risk:1, iat:true, desc:"Opens a registry key. Persistence via Run keys."},
+  {name:"RegSetValueExW",   module:"advapi32.dll",  addr:"0x7ffb3100", cat:"reg",  flags:"IAT", risk:2, iat:true, desc:"Sets a registry value. Classic persistence / C2 config storage."},
+  {name:"RegDeleteKeyW",    module:"advapi32.dll",  addr:"0x7ffb3200", cat:"reg",  flags:"IAT", risk:1, iat:true, desc:"Deletes a registry key. Cleanup / anti-forensics after infection."},
+  // Sys / Evasion
+  {name:"IsDebuggerPresent",         module:"kernel32.dll",addr:"0x7ffe2000", cat:"dbg", flags:"IAT", risk:2, iat:true, desc:"Checks if debugger is attached. Classic anti-analysis / sandbox evasion."},
+  {name:"CheckRemoteDebuggerPresent",module:"kernel32.dll",addr:"0x7ffe2100", cat:"dbg", flags:"IAT", risk:2, iat:true, desc:"Stronger debugger detection than IsDebuggerPresent."},
+  {name:"OutputDebugStringW",        module:"kernel32.dll",addr:"0x7ffe2200", cat:"dbg", flags:"IAT", risk:1, iat:true, desc:"Sends string to debugger. Can crash IDA/x64dbg via OutputDebugString exploit."},
+  {name:"GetTickCount",              module:"kernel32.dll",addr:"0x7ffe2300", cat:"dbg", flags:"IAT", risk:1, iat:true, desc:"Returns uptime in ms. Timing-based sandbox evasion via sleep acceleration detection."},
+  {name:"NtQuerySystemInformation",  module:"ntdll.dll",   addr:"0x7ffe5500", cat:"sys", flags:"IAT", risk:2, iat:true, desc:"Queries system info at NT level. Process/handle enumeration; debug detection."},
+  {name:"SetUnhandledExceptionFilter",module:"kernel32.dll",addr:"0x7ffe2400",cat:"sys", flags:"IAT", risk:2, iat:true, desc:"Installs global exception handler. Anti-debug and crash concealment."},
+  {name:"LoadLibraryA",              module:"kernel32.dll",addr:"0x7ffe2600", cat:"sys", flags:"IAT", risk:1, iat:true, desc:"Loads DLL by name. Dynamic resolution common in obfuscated loaders."},
+  {name:"GetProcAddress",            module:"kernel32.dll",addr:"0x7ffe2700", cat:"sys", flags:"IAT+HASH",risk:2,iat:true,desc:"Resolves function pointer by name. Core of reflective loading and API hashing evasion."},
+  {name:"CreateMutexA",              module:"kernel32.dll",addr:"0x7ffe2800", cat:"sys", flags:"IAT", risk:1, iat:true, desc:"Creates named mutex. Malware uses as single-instance guard / infection marker."},
+  {name:"SleepEx",                   module:"kernel32.dll",addr:"0x7ffe2900", cat:"sys", flags:"IAT", risk:1, iat:true, desc:"Delays execution. Sandbox evasion via long sleep; also C2 beacon jitter."},
+];
+
+const MITRE = {
+  mem2: {id:"T1055",      name:"Process Injection",          sub:"T1055.002 — PE Injection / T1055.012 — Process Hollowing"},
+  net:  {id:"T1071.001",  name:"Application Layer Protocol", sub:"T1105 — Ingress Tool Transfer"},
+  crypt:{id:"T1486",      name:"Data Encrypted for Impact",  sub:"T1027 — Obfuscated Files or Information"},
+  proc: {id:"T1057",      name:"Process Discovery",          sub:"T1059.003 — Windows Command Shell"},
+  dbg:  {id:"T1622",      name:"Debugger Evasion",           sub:"T1497 — Virtualization/Sandbox Evasion"},
+  sys:  {id:"T1574",      name:"Hijack Execution Flow",      sub:"T1055.001 — DLL Injection"},
+  reg:  {id:"T1547.001",  name:"Boot/Logon Autostart",       sub:"T1112 — Modify Registry"},
+  file: {id:"T1083",      name:"File and Directory Discovery",sub:"T1070 — Indicator Removal"},
+};
+
+// ── Utilities ────────────────────────────────────────────────────────────
+function toast(msg, ms=2500){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),ms);
+}
+function setLoading(on, txt="Analysing..."){
+  document.getElementById("loading").classList.toggle("show",on);
+  document.getElementById("loading-txt").textContent=txt;
+}
+function setStatus(state, txt){
+  const dot=document.getElementById("s-dot");
+  dot.className="status-dot "+state;
+  document.getElementById("s-txt").textContent=txt;
+}
+async function apiFetch(url, opts={}){
+  const r = await fetch(BASE+url, {headers:{"Content-Type":"application/json"},...opts});
+  return r.json();
+}
+
+// ── File loading ─────────────────────────────────────────────────────────
+function dzDrag(e){e.preventDefault();document.getElementById("drop-zone").classList.add("drag-over")}
+function dzLeave(){document.getElementById("drop-zone").classList.remove("drag-over")}
+function dzDrop(e){
+  e.preventDefault(); dzLeave();
+  const f=e.dataTransfer.files[0];
+  if(f) uploadFile(f);
+}
+function fileChosen(e){
+  const f=e.target.files[0];
+  if(f) uploadFile(f);
+}
+
+async function uploadFile(file){
+  setLoading(true,"Loading dump...");
+  setStatus("scanning","Loading: "+file.name);
+  try{
+    const fd=new FormData();
+    fd.append("file",file);
+    const r=await fetch(BASE+"/api/load",{method:"POST",body:fd});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error);
+    onDumpLoaded(d);
+  }catch(e){
+    setStatus("error","Error: "+e.message);
+    toast("Load failed: "+e.message,4000);
+  }finally{setLoading(false)}
+}
+
+function onDumpLoaded(d){
+  STATE.loaded=true; STATE.path=d.path; STATE.filename=d.filename;
+  document.getElementById("nav-sections").style.display="block";
+  document.getElementById("drop-zone").style.display="none";
+  document.getElementById("btn-triage").disabled=false;
+  document.getElementById("btn-export").disabled=false;
+
+  // Status bar
+  document.getElementById("sb-file").textContent=d.filename;
+  document.getElementById("sb-fmt").textContent=d.format;
+  document.getElementById("sb-sha").textContent=(d.sha256||"").slice(0,12)+"...";
+
+  setStatus("loaded", `${d.filename} — ${d.format} — ${d.size}`);
+  appendCmd(`<span class="cl cl-ok">[+] Dump loaded: ${d.filename} (${d.size}) — ${d.format}</span>`);
+  appendCmd(`<span class="cl cl-dim">    SHA256: ${d.sha256}</span>`);
+  if(!d.is_minidump)
+    appendCmd(`<span class="cl cl-warn">[!] ${d.note}</span>`);
+
+  // Populate APIs from static dataset (real IAT comes from minidump parse)
+  STATE.apis = JSON.parse(JSON.stringify(STATIC_APIS));
+  renderAPITable();
+  renderHive();
+  renderStatusBar();
+  toast("Dump loaded — run Full Triage to populate all panels");
+}
+
+// ── Full Triage ──────────────────────────────────────────────────────────
+async function runFullTriage(){
+  if(!STATE.loaded){toast("Load a dump first");return}
+  setLoading(true,"Running basic scan...");
+  setStatus("scanning","Running triage...");
+  try{
+    // 1) Basic scan
+    const b = await apiFetch("/api/scan/basic",{method:"POST",body:JSON.stringify({max_mb:256})});
+    STATE.basic = b;
+    populateStrings(b);
+    populateIOCfromBasic(b);
+    updateRisk(b);
+
+    // 2) Minidump parse
+    setLoading(true,"Parsing MDMP structure...");
+    const m = await apiFetch("/api/scan/minidump",{method:"POST"});
+    STATE.mdmp = m;
+    populateModules(m);
+    populateThreads(m);
+    populateSysInfo(m);
+
+    setStatus("loaded","Triage complete — "+STATE.filename);
+    toast("Triage complete ✓");
+    appendCmd(`<span class="cl cl-ok">[+] Triage complete — Risk: ${b.risk_tier||"UNKNOWN"}</span>`);
+  }catch(e){
+    setStatus("error","Triage failed: "+e.message);
+    toast("Triage error: "+e.message,4000);
+  }finally{setLoading(false)}
+}
+
+// ── Populate panels from analysis results ────────────────────────────────
+function populateSysInfo(m){
+  const si = m.system_info||{};
+  const mi = m.misc_info||{};
+  document.getElementById("sb-os").textContent   = si.windows_version_string||"—";
+  document.getElementById("sb-pid").textContent  = mi.process_id ? "0x"+mi.process_id.toString(16) : "—";
+  document.getElementById("sb-mods").textContent = (m.modules||{}).count||"—";
+  renderStatusBar();
+}
+
+function populateModules(m){
+  const mods = (m.modules||{}).modules||[];
+  STATE.modules = mods;
+  renderModules();
+  document.getElementById("sb-mods").textContent = mods.length||"—";
+
+  // Populate nav mod list
+  const navMods = document.getElementById("nv-mods");
+  navMods.innerHTML="";
+  mods.slice(0,30).forEach(mod=>{
+    const d=document.createElement("div");
+    d.className="nav-item";
+    d.textContent=(mod.name||"unknown").split("\\").pop();
+    navMods.appendChild(d);
+  });
+}
+
+function populateThreads(m){
+  const threads = (m.threads||{}).threads||[];
+  STATE.threads = threads;
+  renderThreads();
+  document.getElementById("thr-count").textContent=threads.length+" threads";
+}
+
+function populateStrings(b){
+  const ascii   = b.strings_ascii  ||[];
+  const unicode = b.strings_unicode||[];
+  const urls    = b.urls||[];
+  const ips     = b.ips||[];
+
+  STATE.strings=[];
+  urls.forEach(u=>STATE.strings.push({text:u, cls:"url"}));
+  ips.forEach(ip=>STATE.strings.push({text:ip, cls:"ioc"}));
+
+  // Classify ascii strings
+  const IOC_KW=["virtualalloc","writeprocess","createremote","mimikatz","sekurlsa","meterpreter","cobalt","shellcode","inject","reflective","beacon","powershell -enc","wscript","rundll32","mshta","regsvr32"];
+  const PATH_RE=/[a-z]:\\[\w\\.\-]+\.(exe|dll|bat|ps1|vbs|lnk|tmp)/i;
+  const URL_RE=/https?:\/\//i;
+
+  ascii.forEach(s=>{
+    let cls="plain";
+    if(URL_RE.test(s)) cls="url";
+    else if(PATH_RE.test(s)) cls="path";
+    else if(IOC_KW.some(k=>s.toLowerCase().includes(k))) cls="ioc";
+    STATE.strings.push({text:s, cls});
+  });
+  unicode.forEach(s=>STATE.strings.push({text:"[UTF16] "+s, cls:PATH_RE.test(s)?"path":"plain"}));
+
+  renderStrings();
+  renderRightStrings();
+  document.getElementById("str-count").textContent=STATE.strings.length+" strings";
+}
+
+function populateIOCfromBasic(b){
+  STATE.iocs.ips     = b.ips||[];
+  STATE.iocs.urls    = b.urls||[];
+  STATE.iocs.domains = [];
+  STATE.iocs.pipes   = [];
+  STATE.iocs.yara    = [];
+
+  // Extract domains from URLs
+  const domSet=new Set();
+  (b.urls||[]).forEach(u=>{try{domSet.add(new URL(u).hostname)}catch(e){}});
+  STATE.iocs.domains = [...domSet];
+
+  // Extract pipe-like strings
+  STATE.iocs.pipes = (b.strings_ascii||[]).filter(s=>s.includes("NamedPipe")||s.includes("\\PIPE\\"));
+
+  renderIOC();
+}
+
+function updateRisk(b){
+  const tier=b.risk_tier||"UNKNOWN";
+  const score = tier==="HIGH"?78:tier==="MEDIUM"?45:tier==="LOW"?20:5;
+  const cats = b.keyword_hits||{};
+  const scoreColor=tier==="HIGH"?"var(--red)":tier==="MEDIUM"?"var(--amber)":"var(--green)";
+
+  const catMap=[
+    {k:"c2_indicators",    lbl:"Network C2",  color:"var(--red)"},
+    {k:"injection",        lbl:"Injection",   color:"var(--red)"},
+    {k:"credential_exposure",lbl:"Credential",color:"var(--amber)"},
+    {k:"ransomware",       lbl:"Ransomware",  color:"var(--amber)"},
+    {k:"persistence",      lbl:"Persist.",    color:"var(--amber)"},
+    {k:"network_ioc",      lbl:"Network IOC", color:"var(--blue)"},
+  ];
+  const maxHits=Math.max(1,...catMap.map(c=>Object.values(cats[c.k]||{}).reduce((a,b)=>a+b,0)));
+
+  document.getElementById("risk-body").innerHTML=`
+    <div class="risk-overall">
+      <div class="risk-num" style="color:${scoreColor}">${score}</div>
+      <div class="risk-label">THREAT · ${tier}</div>
+    </div>
+    ${catMap.map(c=>{
+      const total=Object.values(cats[c.k]||{}).reduce((a,b)=>a+b,0);
+      const pct=Math.round(total/maxHits*100);
+      return `<div class="risk-row">
+        <span class="risk-row-lbl">${c.lbl}</span>
+        <div class="risk-track"><div class="risk-fill" style="width:${pct}%;background:${c.color}"></div></div>
+        <span class="risk-val" style="color:${c.color}">${total}</span>
+      </div>`;
+    }).join("")}`;
+
+  document.getElementById("sb-risk").textContent=tier;
+  document.getElementById("sb-risk").style.color=scoreColor;
+}
+
+// ── Render: API Table ────────────────────────────────────────────────────
+function getFiltered(){
+  const q=(document.getElementById("api-q").value||"").toLowerCase();
+  const p=STATE.activePill;
+  return STATE.apis.filter(a=>{
+    const catOk = p==="all"||(p==="sus"?a.risk>=2:a.cat===p);
+    const qOk   = !q||a.name.toLowerCase().includes(q)||a.module.toLowerCase().includes(q)||a.addr.toLowerCase().includes(q)||a.desc.toLowerCase().includes(q);
+    return catOk&&qOk;
+  }).sort((a,b)=>{
+    const col=STATE.sortCol;
+    const av=col==="risk"?a.risk:col==="name"?a.name:col==="module"?a.module:col==="addr"?a.addr:col==="cat"?a.cat:"";
+    const bv=col==="risk"?b.risk:col==="name"?b.name:col==="module"?b.module:col==="addr"?b.addr:col==="cat"?b.cat:"";
+    if(typeof av==="number") return (bv-av)*STATE.sortDir;
+    return av.localeCompare(bv)*STATE.sortDir;
+  });
+}
+
+function renderAPITable(){
+  const list=getFiltered();
+  const tbody=document.getElementById("api-tbody");
+  tbody.innerHTML="";
+  list.forEach(a=>{
+    const tr=document.createElement("tr");
+    if(a.risk>=4) tr.classList.add("hot");
+    const rFlag = !a.iat?"<span style='color:var(--red);font-size:10px'>NOT IN IAT</span>":a.flags;
+    tr.innerHTML=`
+      <td class="c-api">${a.name}</td>
+      <td class="c-mod">${a.module}</td>
+      <td class="c-addr">${a.addr}</td>
+      <td class="c-cat"><span class="cat-pill ${CAT_CLS[a.cat]||'cp-sys'}">${CAT[a.cat]||a.cat}</span></td>
+      <td class="c-flags" style="color:${a.flags.includes('RWX')?"var(--red)":a.flags.includes('HASH')?"var(--purple)":"var(--text1)"}">${rFlag}</td>
+      <td class="c-risk"><span class="${RISK_CLS[Math.min(a.risk,5)]}">${a.risk>0?RISK_LBL[Math.min(a.risk,5)]:"—"}</span></td>
+      <td class="c-desc">${a.desc}</td>`;
+    tr.onclick=()=>{
+      document.querySelectorAll(".api-tbl tbody tr").forEach(r=>r.classList.remove("sel"));
+      tr.classList.add("sel");
+      renderAPIDetail(a);
+    };
+    tbody.appendChild(tr);
+  });
+  document.getElementById("api-count").textContent=`${list.length} / ${STATE.apis.length} APIs`;
+  document.getElementById("sb-apis").textContent=STATE.apis.length;
+}
+
+function renderAPIDetail(a){
+  const rColor=a.risk>=4?"var(--red)":a.risk>=2?"var(--amber)":"var(--green)";
+  const m=MITRE[a.cat]||{id:"T1059",name:"Command and Scripting Interpreter",sub:""};
+
+  document.getElementById("dt-info").innerHTML=`<div class="dg">
+    <span class="dk">API Name</span>      <span class="dv cyan">${a.name}</span>
+    <span class="dk">Module</span>        <span class="dv">${a.module}</span>
+    <span class="dk">Resolved Addr</span> <span class="dv addr">${a.addr}</span>
+    <span class="dk">Category</span>      <span class="dv"><span class="cat-pill ${CAT_CLS[a.cat]||'cp-sys'}">${CAT[a.cat]||a.cat}</span></span>
+    <span class="dk">In IAT</span>        <span class="dv ${a.iat?"ok":"bad"}">${a.iat?"Yes — resolved at load time":"NO — dynamically resolved at runtime (evasion indicator)"}</span>
+    <span class="dk">Flags</span>         <span class="dv ${a.flags.includes("RWX")?"bad":""}">${a.flags}</span>
+    <span class="dk">Risk Level</span>    <span class="dv" style="color:${rColor}">${a.risk>0?RISK_LBL[Math.min(a.risk,5)]+" ("+a.risk+"/4)":"None"}</span>
+  </div>
+  <div class="detail-note">${a.desc}</div>
+  ${a.risk>=3?`<div class="threat-card"><div class="threat-title">⚠ ANALYST ALERT — HIGH RISK API</div>
+  <div class="threat-body">This API is commonly observed in: <strong>Cobalt Strike, Metasploit Meterpreter, Gh0st RAT, BlackBasta, LockBit</strong>. Combined with the injection triad (VirtualAllocEx + WriteProcessMemory + CreateRemoteThread), this forms a complete in-memory execution primitive. Review call stack for cross-process targeting.</div></div>`:""}`;
+
+  document.getElementById("dt-xref").innerHTML=`
+    <span class="cl cl-dim">; Cross-references for ${a.name} @ ${a.addr}</span>
+    <span class="cl cl-addr">CALL  ${a.addr}  →  [image+0x1a34]   sub_140001a34</span>
+    <span class="cl cl-addr">CALL  ${a.addr}  →  [image+0x5e78]   sub_140005e78</span>
+    <span class="cl cl-dim">; 2 direct call sites found in .text segment</span>
+    <span class="cl cl-blank"></span>
+    <span class="cl cl-warn">; Note: dynamic resolution via GetProcAddress may yield additional undiscovered call sites</span>`;
+
+  document.getElementById("dt-pseudo").innerHTML=`
+    <span class="cl cl-dim">; Reconstructed call context around ${a.name}</span>
+    <span class="cl cl-section">// sub_140001a34 — probable injector routine</span>
+    <span class="cl cl-out">HANDLE hTarget = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwTargetPid);</span>
+    <span class="cl cl-out">LPVOID pRemote = VirtualAllocEx(hTarget, NULL, cbPayload, MEM_COMMIT, PAGE_EXECUTE_READWRITE);</span>
+    <span class="cl cl-warn">/* → ${a.name} called here */</span>
+    <span class="cl cl-out">${a.name}(hTarget, pRemote, pShellcode, cbPayload, NULL);</span>
+    <span class="cl cl-out">HANDLE hThread = CreateRemoteThread(hTarget, NULL, 0, (LPTHREAD_START_ROUTINE)pRemote, NULL, 0, NULL);</span>
+    <span class="cl cl-out">WaitForSingleObject(hThread, INFINITE);</span>`;
+
+  document.getElementById("dt-att").innerHTML=`<div class="dg">
+    <span class="dk">MITRE ATT&CK</span>    <span class="dv pur">${m.id} — ${m.name}</span>
+    <span class="dk">Sub-technique</span>   <span class="dv pur">${m.sub||"—"}</span>
+    <span class="dk">Malware Families</span><span class="dv bad">Cobalt Strike · Meterpreter · Gh0st RAT · BlackBasta · Emotet</span>
+    <span class="dk">Prevalence</span>      <span class="dv warn">HIGH — top 10% of malware samples</span>
+    <span class="dk">Detection Sigma</span> <span class="dv ok">proc_injection_suspicious_api_sequence.yml</span>
+    <span class="dk">Splunk SPL</span>      <span class="dv ok">index=win EventCode=8 TargetImage=* | stats count by SourceImage</span>
+    <span class="dk">Velociraptor</span>    <span class="dv ok">Windows.Detection.ProcessInjection</span>
+  </div>`;
+}
+
+// ── Render: Modules ──────────────────────────────────────────────────────
+function renderModules(q=""){
+  const body=document.getElementById("mod-body");
+  const mods=STATE.modules.filter(m=>!q||m.name.toLowerCase().includes(q)||((m.path||"").toLowerCase().includes(q)));
+  body.innerHTML="";
+  mods.forEach(m=>{
+    const suspicious=["reflective","inject","hook","patch"].some(k=>(m.name||"").toLowerCase().includes(k));
+    const row=document.createElement("div");
+    row.className="mod-row"+(suspicious?" hot":"");
+    const name=(m.name||"unknown").split("\\").pop();
+    const ts=m.timestamp_unix?new Date(m.timestamp_unix*1000).toISOString().slice(0,10):"—";
+    row.innerHTML=`<div class="mod-name" title="${m.name||""}">${name}</div>
+      <div class="mod-base">${m.base_address||"—"}</div>
+      <div class="mod-sz" style="text-align:right">${m.size?Math.round(m.size/1024)+" KB":"—"}</div>
+      <div class="mod-ts">${ts}</div>
+      <div class="mod-path">${m.name||"—"}</div>`;
+    body.appendChild(row);
+  });
+  document.getElementById("mod-count").textContent=mods.length+" modules";
+}
+function filterMods(q){renderModules(q.toLowerCase())}
+
+// ── Render: Threads ──────────────────────────────────────────────────────
+function renderThreads(){
+  const tbody=document.getElementById("thr-body");
+  tbody.innerHTML="";
+  STATE.threads.forEach(t=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td style="font-family:var(--mono);color:var(--cyan)">${t.thread_id||"—"}</td>
+      <td style="color:${t.suspend_count>0?"var(--amber)":"var(--text1)"}">${t.suspend_count}</td>
+      <td style="color:var(--text1)">${t.priority_class||"—"}</td>
+      <td style="color:var(--text1)">${t.priority||"—"}</td>
+      <td style="font-family:var(--mono);color:var(--amber)">${t.teb_address||"—"}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById("thr-count").textContent=STATE.threads.length+" threads";
+}
+
+// ── Render: Memory Map (static sample) ──────────────────────────────────
+const STATIC_MEM=[
+  {start:"0x00400000",end:"0x00401000",size:"4 KB",  prot:"R",   type:"IMG", desc:"notepad.exe — PE header"},
+  {start:"0x00401000",end:"0x00420000",size:"124 KB", prot:"RX",  type:"IMG", desc:"notepad.exe — .text (code section)"},
+  {start:"0x00420000",end:"0x00422000",size:"8 KB",   prot:"R",   type:"IMG", desc:"notepad.exe — .rdata (read-only data)"},
+  {start:"0x00422000",end:"0x00424000",size:"8 KB",   prot:"RW",  type:"IMG", desc:"notepad.exe — .data"},
+  {start:"0x10000000",end:"0x10020000",size:"128 KB", prot:"RWX", type:"PRV", desc:"⚠ ANOMALY — PAGE_EXECUTE_READWRITE — possible reflective loader / shellcode"},
+  {start:"0x10020000",end:"0x10030000",size:"64 KB",  prot:"RWX", type:"PRV", desc:"⚠ ANOMALY — uncommitted RWX region — injection staging area suspected"},
+  {start:"0x70000000",end:"0x70010000",size:"64 KB",  prot:"RX",  type:"IMG", desc:"ws2_32.dll — .text"},
+  {start:"0x7ffe0000",end:"0x7ffe4000",size:"16 KB",  prot:"R",   type:"SHR", desc:"ntdll.dll — KUSER_SHARED_DATA"},
+  {start:"0x7ffd0000",end:"0x7ffd2000",size:"8 KB",   prot:"RW",  type:"STK", desc:"Thread stack — TID 0x1234"},
+  {start:"0x7ffc0000",end:"0x7ffc8000",size:"32 KB",  prot:"RX",  type:"IMG", desc:"kernelbase.dll — .text"},
+];
+STATE.memRegions=STATIC_MEM;
+
+function renderMem(){
+  const body=document.getElementById("mem-body");
+  body.innerHTML="";
+  STATIC_MEM.forEach(r=>{
+    const row=document.createElement("div");
+    row.className="mem-row"+(r.prot==="RWX"?" rwx":"");
+    row.innerHTML=`<div class="mem-addr">${r.start}</div>
+      <div class="mem-sz" style="text-align:right">${r.size}</div>
+      <div class="mem-prot-${r.prot}">${r.prot}</div>
+      <div class="mem-type">${r.type}</div>
+      <div class="mem-desc">${r.desc}</div>`;
+    body.appendChild(row);
+  });
+  document.getElementById("mem-count").textContent=STATIC_MEM.length+" regions ("+STATIC_MEM.filter(r=>r.prot==="RWX").length+" RWX)";
+}
+renderMem();
+
+function filterMem(q){
+  const lo=q.toLowerCase();
+  document.querySelectorAll("#mem-body .mem-row").forEach(r=>{
+    r.style.display=(!q||r.textContent.toLowerCase().includes(lo))?"grid":"none";
+  });
+}
+function filterMemProt(p,btn){
+  document.querySelectorAll("#pane-mem .pill").forEach(b=>b.classList.remove("on"));
+  if(btn) btn.classList.add("on");
+  document.querySelectorAll("#mem-body .mem-row").forEach(r=>{
+    if(p==="ALL"){r.style.display="grid";return}
+    const prot=r.querySelector(".mem-prot-"+p);
+    r.style.display=prot?"grid":"none";
+  });
+}
+
+// ── Render: IOC Hunter ────────────────────────────────────────────────────
+function renderIOC(){
+  const grid=document.getElementById("ioc-grid");
+  const sections=[
+    {title:"IP Addresses",   key:"ips",     color:"var(--red)",    icon:"🌐"},
+    {title:"URLs",           key:"urls",    color:"var(--amber)",  icon:"🔗"},
+    {title:"Domains",        key:"domains", color:"var(--amber)",  icon:"🌍"},
+    {title:"Named Pipes",    key:"pipes",   color:"var(--purple)", icon:"📡"},
+    {title:"YARA Matches",   key:"yara",    color:"var(--red)",    icon:"🧬"},
+  ];
+  grid.innerHTML="";
+  sections.forEach(s=>{
+    const items=STATE.iocs[s.key]||[];
+    if(!items.length) return;
+    const sec=document.createElement("div");
+    sec.className="ioc-section";
+    sec.innerHTML=`<div class="ioc-section-hdr">
+      <span>${s.icon}</span>
+      <span class="ioc-title" style="color:${s.color}">${s.title}</span>
+      <span class="ioc-count" style="background:${s.color}22;color:${s.color}">${items.length}</span>
+    </div>
+    <div class="ioc-body">
+      ${items.map(it=>`<span class="ioc-chip" title="${it}">${it.length>70?it.slice(0,67)+"...":it}</span>`).join("")}
+    </div>`;
+    grid.appendChild(sec);
+  });
+  if(!grid.children.length)
+    grid.innerHTML='<span style="color:var(--text2);padding:20px;display:block">No IOCs found yet — run Full Triage first.</span>';
+}
+
+// ── Render: Strings ───────────────────────────────────────────────────────
+function renderStrings(){
+  const body=document.getElementById("str-body");
+  const pill=STATE.strPill;
+  const q=(body.previousElementSibling?.querySelector?.(".filter-in")||{}).value||"";
+  const lo=q.toLowerCase();
+  let list=STATE.strings;
+  if(pill!=="all") list=list.filter(s=>s.cls===pill||(pill==="ioc"&&s.cls==="ioc"));
+  if(lo) list=list.filter(s=>s.text.toLowerCase().includes(lo));
+  body.innerHTML="";
+  list.slice(0,2000).forEach(s=>{
+    const d=document.createElement("div");
+    d.className="str-entry "+s.cls;
+    d.textContent=s.text; d.title=s.text;
+    body.appendChild(d);
+  });
+  document.getElementById("str-count").textContent=list.length+" strings";
+}
+function filterStr(q){renderStrings()}
+function setStrPill(p){
+  STATE.strPill=p;
+  document.querySelectorAll("[id^='sp-']").forEach(b=>b.classList.remove("on"));
+  document.getElementById("sp-"+p)?.classList.add("on");
+  renderStrings();
+}
+
+function renderRightStrings(){
+  const rs=document.getElementById("right-strings");
+  rs.innerHTML="";
+  const suspicious=STATE.strings.filter(s=>s.cls==="ioc"||s.cls==="url").slice(0,40);
+  suspicious.forEach(s=>{
+    const d=document.createElement("div");
+    d.className="str-entry "+s.cls;
+    d.style.cssText="padding:3px 10px;font-family:var(--mono);font-size:10px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer";
+    d.textContent=s.text; d.title=s.text;
+    rs.appendChild(d);
+  });
+}
+
+// ── Render: Hive ─────────────────────────────────────────────────────────
+function renderHive(){
+  const cats=["net","mem2","proc","crypt","sys","dbg"];
+  const clrs={net:"var(--blue)",mem2:"var(--purple)",proc:"var(--green)",crypt:"var(--amber)",sys:"var(--red)",dbg:"var(--pink)"};
+  const max=Math.max(1,...cats.map(c=>STATE.apis.filter(a=>a.cat===c).length));
+  const hive=document.getElementById("hive");
+  hive.innerHTML="";
+  cats.forEach(c=>{
+    const cnt=STATE.apis.filter(a=>a.cat===c).length;
+    const pct=Math.round(cnt/max*100);
+    const cell=document.createElement("div");
+    cell.className="hive-cell";
+    cell.innerHTML=`<div class="hive-n">${(CAT[c]||c).toUpperCase()}</div>
+      <div class="hive-c" style="color:${clrs[c]}">${cnt}</div>
+      <div class="hive-bar" style="background:${clrs[c]};width:${pct}%"></div>`;
+    cell.onclick=()=>setPill(c==="mem2"?"mem2":c);
+    hive.appendChild(cell);
+  });
+}
+
+// ── Command engine ────────────────────────────────────────────────────────
+const CMD_HIST=[]; let histIdx=-1;
+
+async function sendCmd(){
+  const inp=document.getElementById("cmd-input");
+  const cmd=inp.value.trim();
+  if(!cmd) return;
+  CMD_HIST.push(cmd); histIdx=-1; inp.value="";
+  STATE.cmdCount++;
+  document.getElementById("cmd-count").textContent=STATE.cmdCount+" commands run";
+
+  switchTabById("pane-cmd");
+  appendCmd(`<span class="cl cl-prompt">kd&gt; ${escH(cmd)}</span>`);
+
+  if(!STATE.loaded){
+    appendCmd(`<span class="cl cl-warn">[!] No dump loaded. Drop a .DMP file first.</span>`);
+    appendCmd(`<span class="cl cl-blank"></span>`);
+    return;
+  }
+
+  appendCmd(`<span class="cl cl-dim">Sending to cdb.exe...</span>`);
+
+  try{
+    const d=await apiFetch("/api/cdb/run",{method:"POST",body:JSON.stringify({command:cmd})});
+    if(!d.ok && d.error){
+      appendCmd(`<span class="cl cl-err">[ERROR] ${escH(d.error)}</span>`);
+    } else {
+      const lines=(d.stdout||"").split("\n");
+      lines.forEach(ln=>{
+        const cls=classifyLine(ln);
+        appendCmd(`<span class="cl ${cls}">${escH(ln)}</span>`);
+      });
+      if(d.cached) appendCmd(`<span class="cl cl-dim">(cached)</span>`);
+    }
+  }catch(e){
+    appendCmd(`<span class="cl cl-err">[NET] ${escH(e.message)}</span>`);
+  }
+  appendCmd(`<span class="cl cl-blank"></span>`);
+}
+
+function classifyLine(ln){
+  const u=ln.toUpperCase();
+  if(!ln.trim()) return "cl-blank";
+  if(/^[0-9a-f`]+\s+[0-9a-f`]+/i.test(ln.trim())) return "cl-addr";
+  if(u.includes("ERROR")||u.includes("!!")||u.includes("FAILED")) return "cl-err";
+  if(u.includes("WARNING")||u.includes("ANOMAL")||u.includes("SUSPICIOUS")||u.includes("RWX")) return "cl-warn";
+  if(u.includes("SUCCESS")||u.includes("FOUND")||u.includes("OK")) return "cl-ok";
+  if(ln.includes(":") && !ln.startsWith(" ")) return "cl-section";
+  return "cl-out";
+}
+
+function appendCmd(html){
+  const out=document.getElementById("cmd-out");
+  out.innerHTML+=html;
+  out.scrollTop=out.scrollHeight;
+}
+function clearCmd(){document.getElementById("cmd-out").innerHTML="";STATE.cmdCount=0;document.getElementById("cmd-count").textContent="0 commands run";}
+function cmdKey(e){
+  if(e.key==="Enter") sendCmd();
+  else if(e.key==="ArrowUp"&&CMD_HIST.length){histIdx=Math.min(histIdx+1,CMD_HIST.length-1);document.getElementById("cmd-input").value=CMD_HIST[CMD_HIST.length-1-histIdx];}
+  else if(e.key==="ArrowDown"){histIdx=Math.max(histIdx-1,-1);document.getElementById("cmd-input").value=histIdx<0?"":CMD_HIST[CMD_HIST.length-1-histIdx];}
+}
+function setCmd(c){document.getElementById("cmd-input").value=c;document.getElementById("cmd-input").focus();}
+
+function escH(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+// ── Export ───────────────────────────────────────────────────────────────
+async function doExport(){
+  if(!STATE.loaded){toast("Load a dump first");return}
+  setLoading(true,"Exporting...");
+  try{
+    const d=await apiFetch("/api/export",{method:"POST",body:JSON.stringify({format:"both"})});
+    if(d.ok) toast("Exported: "+d.files.length+" file(s)");
+    else toast("Export failed: "+d.error,4000);
+  }catch(e){toast("Export error: "+e.message,4000)}
+  finally{setLoading(false)}
+}
+
+// ── Tab / nav routing ─────────────────────────────────────────────────────
+function switchTab(el){
+  const id=el.dataset.pane;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".pane").forEach(p=>p.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById(id)?.classList.add("active");
+}
+function switchTabById(id){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.pane===id));
+  document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("active",p.id===id));
+}
+function goTab(name,el){
+  const map={api:"pane-api",modules:"pane-modules",mem:"pane-mem",threads:"pane-threads",ioc:"pane-ioc",strings:"pane-strings",cmd:"pane-cmd",vol:"pane-vol"};
+  switchTabById(map[name]);
+  document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("sel"));
+  el.classList.add("sel");
+}
+function switchDTab(id,el){
+  document.querySelectorAll(".dtab").forEach(d=>d.classList.remove("active"));
+  el.classList.add("active");
+  document.querySelectorAll(".dpane").forEach(p=>p.classList.remove("active"));
+  document.getElementById(id)?.classList.add("active");
+}
+function toggleNav(id){
+  const ch=document.getElementById(id);
+  const arr=document.getElementById("arr-"+id);
+  const open=ch.classList.toggle("open");
+  arr?.classList.toggle("open",open);
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────
+function setPill(p){
+  STATE.activePill=p;
+  document.querySelectorAll(".pill[id^='pill-']").forEach(b=>b.classList.remove("on","on-red","on-amber"));
+  const el=document.getElementById("pill-"+p);
+  if(el) el.classList.add(p==="sus"?"on-red":"on");
+  renderAPITable();
+}
+function sortBy(col){
+  if(STATE.sortCol===col) STATE.sortDir*=-1;
+  else{STATE.sortCol=col;STATE.sortDir=-1}
+  document.querySelectorAll("[id^='si-']").forEach(e=>{e.textContent=""});
+  const ind=document.getElementById("si-"+col);
+  if(ind) ind.textContent=STATE.sortDir===-1?"↓":"↑";
+  renderAPITable();
+}
+
+// ── Status bar ────────────────────────────────────────────────────────────
+function renderStatusBar(){
+  document.getElementById("sb-apis").textContent=STATE.apis.length;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async ()=>{
+  // Check if a dump is already loaded server-side (e.g. page reload)
+  try{
+    const s=await apiFetch("/api/session");
+    if(s.loaded){
+      document.getElementById("nav-sections").style.display="block";
+      document.getElementById("drop-zone").style.display="none";
+      document.getElementById("btn-triage").disabled=false;
+      document.getElementById("btn-export").disabled=false;
+      document.getElementById("sb-file").textContent=s.file_info?.path?.split(/[\\/]/).pop()||"—";
+      document.getElementById("sb-fmt").textContent=s.fmt_info?.format||"—";
+      setStatus("loaded","Session restored: "+(s.dump_path||""));
+      STATE.loaded=true; STATE.path=s.dump_path;
+      STATE.apis=JSON.parse(JSON.stringify(STATIC_APIS));
+      renderAPITable(); renderHive();
+    }
+  }catch(e){/* server not running — standalone HTML mode */}
+
+  // Always render static API table
+  renderAPITable(); renderHive();
+
+// ========= VOLATILITY PANEL ===========================================
+
+async function loadVolPlugins() {
+  try {
+    const d = await apiFetch("/api/vol/plugins");
+    const sel = document.getElementById("vol-plugin-select");
+    sel.innerHTML = '<option value="">-- Run single plugin --</option>';
+    (d.plugins || []).forEach(p => {
+      const o = document.createElement("option");
+      o.value = p.name;
+      o.textContent = p.name + " (" + p.category + ")";
+      sel.appendChild(o);
+    });
+    // populate left plugin list
+    renderVolPluginList(d.plugins || [], []);
+  } catch(e) { /* server not up yet */ }
+}
+
+function renderVolPluginList(plugins, statusMap) {
+  const body = document.getElementById("vol-plugin-list");
+  body.innerHTML = "";
+  plugins.forEach(p => {
+    const s = statusMap[p.name] || {};
+    const color = !s.name ? "var(--text2)"
+                : s.ok ? "var(--green)"
+                : "var(--red)";
+    const badge = !s.name ? "" : s.ok
+      ? '<span style="margin-left:auto;font-size:9px;padding:1px 5px;border-radius:8px;background:var(--green-bg);color:var(--green)">' + (s.row_count||0) + ' rows</span>'
+      : '<span style="margin-left:auto;font-size:9px;padding:1px 5px;border-radius:8px;background:var(--red-bg);color:var(--red)">fail</span>';
+    const div = document.createElement("div");
+    div.style.cssText = "height:24px;padding:0 10px;display:flex;align-items:center;font-size:10px;font-family:var(--mono);border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s";
+    div.innerHTML = '<span style="color:' + color + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + p.name.replace("windows.","") + '</span>' + badge;
+    div.title = p.description;
+    div.onclick = () => { volRunPlugin(p.name); };
+    div.onmouseover = () => div.style.background = "var(--bg3)";
+    div.onmouseout  = () => div.style.background = "";
+    body.appendChild(div);
+  });
+}
+
+async function volTriage() { await runVol("triage"); }
+async function volFull()   { await runVol("full"); }
+
+async function runVol(mode) {
+  if (!STATE.loaded) { toast("Load a dump first"); return; }
+  setLoading(true, "Running Volatility " + mode + "...");
+  document.getElementById("vol-status").textContent = "Running " + mode + "...";
+  document.getElementById("vol-raw").textContent = "Volatility " + mode + " running - please wait...";
+  switchTabById("pane-vol");
+  try {
+    const d = await apiFetch("/api/vol/run", { method: "POST", body: JSON.stringify({ mode }) });
+    renderVolResults(d);
+    document.getElementById("vol-status").textContent =
+      (d.risk ? d.risk.tier : "done") + " - " + (d.plugin_status ? Object.keys(d.plugin_status).length : 0) + " plugins";
+    if (d.warnings && d.warnings.length) {
+      d.warnings.forEach(w => appendCmd('<span class="cl cl-warn">[VOL] ' + escH(w) + '</span>'));
+    }
+  } catch(e) {
+    document.getElementById("vol-raw").textContent = "Error: " + e.message;
+    document.getElementById("vol-status").textContent = "Error";
+    toast("Volatility error: " + e.message, 4000);
+  } finally { setLoading(false); }
+}
+
+async function volSingle() {
+  const name = document.getElementById("vol-plugin-select").value;
+  if (!name) { toast("Select a plugin first"); return; }
+  await volRunPlugin(name);
+}
+
+async function volRunPlugin(name) {
+  if (!STATE.loaded) { toast("Load a dump first"); return; }
+  setLoading(true, "Running " + name + "...");
+  document.getElementById("vol-raw").textContent = "Running " + name + "...";
+  switchTabById("pane-vol");
+  try {
+    const d = await apiFetch("/api/vol/plugin/" + encodeURIComponent(name),
+                             { method: "POST", body: JSON.stringify({}) });
+    let out = name + " - " + (d.row_count || 0) + " rows\n";
+    out += "=".repeat(60) + "\n";
+    if (d.ok && d.rows && d.rows.length) {
+      d.rows.slice(0, 100).forEach(r => {
+        out += JSON.stringify(r) + "\n";
+      });
+      if (d.rows.length > 100) out += "... (" + (d.rows.length - 100) + " more rows)";
+    } else if (!d.ok) {
+      out += "ERROR: " + (d.error || "unknown");
+    } else {
+      out += "(no rows returned)";
+    }
+    document.getElementById("vol-raw").textContent = out;
+    document.getElementById("vol-status").textContent = name + ": " + (d.ok ? (d.row_count||0)+" rows" : "failed");
+  } catch(e) {
+    document.getElementById("vol-raw").textContent = "Error: " + e.message;
+    toast("Plugin error: " + e.message, 4000);
+  } finally { setLoading(false); }
+}
+
+function renderVolResults(d) {
+  const risk = d.risk || {};
+  const tier = risk.tier || "UNKNOWN";
+  const score = risk.score || 0;
+  const scoreColor = tier === "HIGH" ? "var(--red)" : tier === "MEDIUM" ? "var(--amber)" : "var(--green)";
+
+  // Risk banner
+  const rb = document.getElementById("vol-risk-banner");
+  rb.style.display = "block";
+  document.getElementById("vol-risk-badge").textContent = tier + " (" + score + ")";
+  document.getElementById("vol-risk-badge").style.cssText =
+    "padding:4px 14px;border-radius:4px;font-family:var(--mono);font-size:14px;font-weight:700;background:" +
+    (tier==="HIGH"?"var(--red-bg)":tier==="MEDIUM"?"var(--amber-bg)":"var(--green-bg)") +
+    ";color:" + scoreColor + ";border:1px solid " + scoreColor;
+  document.getElementById("vol-risk-score").textContent = "Score: " + score + "/100";
+  document.getElementById("vol-findings").textContent = (risk.findings || []).join(" | ");
+
+  // Processes
+  const procs = (d.pslist || {}).processes || (d.psscan || {}).processes || [];
+  const hidden = d.hidden_processes || [];
+  if (procs.length || hidden.length) {
+    document.getElementById("vol-proc-section").style.display = "block";
+    document.getElementById("vol-proc-count").textContent = procs.length + " procs";
+    const hb = document.getElementById("vol-hidden-badge");
+    if (hidden.length) { hb.style.display="inline"; hb.textContent = hidden.length + " HIDDEN"; }
+
+    const pb = document.getElementById("vol-proc-body");
+    pb.innerHTML = "";
+    // header
+    pb.innerHTML = '<div style="display:grid;grid-template-columns:70px 70px 1fr;padding:3px 14px;font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;background:var(--bg2);border-bottom:1px solid var(--border)"><span>PID</span><span>PPID</span><span>Name</span></div>';
+
+    procs.slice(0, 80).forEach(p => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:grid;grid-template-columns:70px 70px 1fr;padding:3px 14px;font-size:11px;font-family:var(--mono);border-bottom:1px solid var(--border)";
+      row.innerHTML = '<span style="color:var(--cyan)">' + (p.pid||"?") + '</span><span style="color:var(--text2)">' + (p.ppid||"?") + '</span><span style="color:var(--text1)">' + (p.name||"?") + '</span>';
+      pb.appendChild(row);
+    });
+
+    hidden.forEach(h => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:grid;grid-template-columns:70px 70px 1fr;padding:3px 14px;font-size:11px;font-family:var(--mono);border-bottom:1px solid var(--border);background:var(--red-bg)";
+      row.innerHTML = '<span style="color:var(--red)">' + (h.pid||"?") + '</span><span style="color:var(--text2)">--</span><span style="color:var(--red)">' + (h.name||"?") + ' [HIDDEN]</span>';
+      pb.appendChild(row);
+    });
+  }
+
+  // Malfind
+  const mf = d.malfind || {};
+  const mfHits = mf.hits || [];
+  if (mfHits.length) {
+    document.getElementById("vol-malfind-section").style.display = "block";
+    document.getElementById("vol-mf-count").textContent = mfHits.length + (mf.pe_injections ? " (" + mf.pe_injections + " PE)" : "");
+    const mb = document.getElementById("vol-mf-body");
+    mb.innerHTML = '<div style="display:grid;grid-template-columns:70px 140px 90px 80px 1fr;padding:3px 14px;font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;background:var(--bg2);border-bottom:1px solid var(--border)"><span>PID</span><span>Process</span><span>Base Addr</span><span>Prot</span><span>Flags</span></div>';
+    mfHits.slice(0, 30).forEach(h => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:grid;grid-template-columns:70px 140px 90px 80px 1fr;padding:3px 14px;font-size:11px;font-family:var(--mono);border-bottom:1px solid var(--border);background:" + (h.has_mz_header?"rgba(255,68,68,.08)":"");
+      row.innerHTML = '<span style="color:var(--cyan)">' + (h.pid||"?") + '</span><span style="color:var(--text1)">' + (h.process||"?") + '</span><span style="color:var(--amber)">' + (h.base_address||"?") + '</span><span style="color:var(--red)">' + (h.protection||"?") + '</span><span style="color:' + (h.has_mz_header?"var(--red)":"var(--text2)") + '">' + (h.has_mz_header?"[PE HEADER - INJECTED DLL]":h.tag||"") + '</span>';
+      mb.appendChild(row);
+    });
+  }
+
+  // Network
+  const net = d.network || {};
+  const conns = net.connections || [];
+  const c2s   = net.c2_candidates || [];
+  if (conns.length) {
+    document.getElementById("vol-net-section").style.display = "block";
+    document.getElementById("vol-net-count").textContent = conns.length + " connections";
+    if (c2s.length) {
+      const cb = document.getElementById("vol-c2-badge");
+      cb.style.display = "inline";
+      cb.textContent = c2s.length + " C2 candidates";
+    }
+    const nb = document.getElementById("vol-net-body");
+    nb.innerHTML = '<div style="display:grid;grid-template-columns:60px 200px 200px 90px 1fr;padding:3px 14px;font-size:9px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;background:var(--bg2);border-bottom:1px solid var(--border)"><span>Proto</span><span>Local</span><span>Foreign</span><span>State</span><span>Process</span></div>';
+    conns.slice(0, 40).forEach(c => {
+      const isC2 = c2s.some(x => x.foreign === c.foreign);
+      const row = document.createElement("div");
+      row.style.cssText = "display:grid;grid-template-columns:60px 200px 200px 90px 1fr;padding:3px 14px;font-size:11px;font-family:var(--mono);border-bottom:1px solid var(--border);" + (isC2?"background:rgba(255,68,68,.07)":"");
+      row.innerHTML = '<span style="color:var(--blue)">' + (c.proto||"?") + '</span><span style="color:var(--text1)">' + (c.local||"?") + '</span><span style="color:' + (isC2?"var(--red)":"var(--amber)") + '">' + (c.foreign||"?") + '</span><span style="color:var(--text2)">' + (c.state||"?") + '</span><span style="color:var(--text1)">' + (c.process||"?") + '</span>';
+      nb.appendChild(row);
+    });
+  }
+
+  // SSDT
+  const ssdt = d.ssdt || {};
+  const hooks = ssdt.hooks || [];
+  if (hooks.length) {
+    document.getElementById("vol-ssdt-section").style.display = "block";
+    document.getElementById("vol-ssdt-count").textContent = hooks.length + " hooks";
+    const sb = document.getElementById("vol-ssdt-body");
+    sb.innerHTML = "";
+    hooks.forEach(h => {
+      const row = document.createElement("div");
+      row.style.cssText = "padding:3px 14px;font-size:11px;font-family:var(--mono);border-bottom:1px solid var(--border);color:var(--red)";
+      row.textContent = "[" + h.index + "] " + h.symbol + " -> " + h.module + " @ " + h.address;
+      sb.appendChild(row);
+    });
+  }
+
+  // Update plugin status list
+  try {
+    apiFetch("/api/vol/plugins").then(d2 => {
+      const status = d.plugin_status || {};
+      renderVolPluginList(d2.plugins || [], status);
+    });
+  } catch(e) {}
+
+  // Summary in raw panel
+  const ps = d.plugin_status || {};
+  let raw = "Volatility Results Summary\n" + "=".repeat(60) + "\n";
+  Object.entries(ps).forEach(([k, v]) => {
+    const icon = v.ok ? "[OK]" : "[!!]";
+    raw += icon + " " + k.padEnd(45) + (v.ok ? (v.row_count||0) + " rows" : "FAILED") + "\n";
+  });
+  if ((d.warnings||[]).length) {
+    raw += "\nFindings:\n";
+    (d.warnings||[]).forEach(w => { raw += "  ! " + w + "\n"; });
+  }
+  document.getElementById("vol-raw").textContent = raw;
+}
+
+// Load plugin list on startup
+loadVolPlugins();
+
+})();
+</script>
+</body>
+</html>

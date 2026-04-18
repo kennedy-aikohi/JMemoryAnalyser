@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jmemoryanalyser"
+version = "1.0.0"
+description = "Production memory dump analyser and GUI forensics workbench for Windows .DMP files"
+requires-python = ">=3.10"
+authors = [
+    { name = "Kennedy Aikohi" }
+]
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Security",
+]
+dependencies = ["flask>=2.3"]
+
+[project.optional-dependencies]
+yara       = ["yara-python"]
+minidump   = ["minidump"]
+volatility = ["volatility3"]
+pe         = ["pefile"]
+all        = ["yara-python", "minidump", "volatility3", "pefile"]
+
+[project.scripts]
+jma     = "jma.cli:main"
+jma-gui = "jma.gui.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+
+[tool.setuptools.packages.find]
+where = ["python"]

@@ -1,0 +1,34 @@
+{
+  "_comment": "YARA and Sigma rule source repositories for JMemoryAnalyser.",
+  "_update_cmd": "powershell -ExecutionPolicy Bypass -File .\\scripts\\Update-JMA-Rules.ps1",
+
+  "yara_sources": [
+    {
+      "name": "neo23x0_signature-base",
+      "git": "https://github.com/Neo23x0/signature-base.git",
+      "branch": "master",
+      "paths": ["yara"]
+    },
+    {
+      "name": "elastic_protections-artifacts",
+      "git": "https://github.com/elastic/protections-artifacts.git",
+      "branch": "main",
+      "paths": ["yara"]
+    },
+    {
+      "name": "malpedia_yara",
+      "git": "https://github.com/malpedia/signator-rules.git",
+      "branch": "main",
+      "paths": ["."]
+    }
+  ],
+
+  "sigma_sources": [
+    {
+      "name": "SigmaHQ_core",
+      "git": "https://github.com/SigmaHQ/sigma.git",
+      "branch": "master",
+      "paths": ["rules/windows"]
+    }
+  ]
+}
